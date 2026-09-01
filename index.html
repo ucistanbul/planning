@@ -78,7 +78,7 @@
   .modal p{font-size:13px;color:var(--muted);margin:0 0 12px;}
   .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:15px;margin-bottom:12px;}
   .modal button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
-  .hidden{display:none;}
+  .hidden{display:none !important;}
   .setup-warning{background:#F5E1DC;color:var(--danger);border-radius:var(--radius);padding:14px;margin:18px;font-size:13px;line-height:1.5;}
   .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
   .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:340px;width:100%;}
@@ -264,9 +264,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   sb.auth.onAuthStateChange((_event, session)=>{
     if(session) showApp(); else showAuth();
   });
-  sb.auth.getSession().then(({data})=>{
+
+  (async ()=>{
+    const { data } = await sb.auth.getSession();
     if(data.session) showApp(); else showAuth();
-  });
+  })();
 
   // ---------- Todos ----------
   async function loadTodos(){
