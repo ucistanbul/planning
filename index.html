@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root{
     --bg:#FAF8F3; --surface:#FFFFFF; --ink:#20261F; --muted:#7C7568;
@@ -15,68 +16,123 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
-  .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:72px;}
-  header{padding:22px 18px 14px;display:flex;align-items:baseline;justify-content:space-between;}
-  header .brand{font-family:'Fraunces',serif;font-size:22px;font-weight:600;letter-spacing:-0.01em;}
-  header .who{font-size:13px;color:var(--muted);background:none;border:none;font-family:inherit;cursor:pointer;padding:4px;}
-  main{flex:1;padding:0 18px 24px;}
+  .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:76px;}
+  header{padding:20px 16px 12px;display:flex;align-items:baseline;justify-content:space-between;}
+  header .brand{font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  header .who{font-size:12px;color:var(--muted);background:none;border:none;font-family:inherit;cursor:pointer;padding:4px;}
+  main{flex:1;padding:0 16px 24px;}
   section{display:none;}
   section.active{display:block;}
-  h2.section-title{font-family:'Fraunces',serif;font-size:18px;font-weight:500;margin:4px 0 14px;}
-  .add-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:18px;}
-  .add-card input[type=text]{width:100%;border:none;font-family:inherit;font-size:15px;color:var(--ink);outline:none;background:transparent;}
+  h2.section-title{font-family:'Fraunces',serif;font-size:17px;font-weight:500;margin:4px 0 12px;display:flex;align-items:center;justify-content:space-between;}
+  h2.section-title .sub{color:var(--muted);font-weight:400;font-size:12px;}
+  .empty{color:var(--muted);font-size:14px;padding:22px 4px;text-align:center;}
+
+  /* buttons/inputs shared */
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-ghost{background:none;border:1px solid var(--border);color:var(--ink);border-radius:8px;padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;}
+  .btn-ghost.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+  input[type=text], input[type=date], textarea, select{font-family:inherit;color:var(--ink);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;}
+
+  /* --- Latest --- */
+  .feed-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-icon{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+  .feed-body .txt{font-size:14px;line-height:1.4;}
+  .feed-body .meta{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  /* --- Topics --- */
+  .topic-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer;}
+  .topic-row .title{font-family:'Fraunces',serif;font-size:15px;}
+  .topic-row .meta{font-size:11px;color:var(--muted);margin-top:3px;}
+  .topic-row .arrow{color:var(--muted);}
+  .add-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px;}
+  .add-card input[type=text]{width:100%;border:none;font-size:15px;outline:none;background:transparent;}
   .add-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
-  .add-row select, .add-row input[type=date]{flex:1;min-width:100px;border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--bg);}
-  .add-btn{width:100%;margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;}
-  .group-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin:18px 0 8px;}
-  .group-label:first-of-type{margin-top:0;}
-  .todo{display:flex;align-items:flex-start;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;margin-bottom:8px;}
+  .add-row select, .add-row input[type=date]{flex:1;min-width:100px;border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:13px;background:var(--bg);}
+  .add-btn{width:100%;margin-top:10px;}
+  .topic-back{background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:0 0 12px;font-family:inherit;}
+  .chat-msg{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
+  .chat-msg .who{font-size:12px;font-weight:600;color:var(--accent);}
+  .chat-msg .body{font-size:14px;margin-top:3px;line-height:1.5;white-space:pre-wrap;}
+  .chat-msg .ts{font-size:11px;color:var(--muted);margin-top:4px;}
+  .chat-compose{display:flex;gap:8px;margin-top:10px;}
+  .chat-compose textarea{flex:1;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;resize:none;min-height:40px;}
+
+  /* --- Todos --- */
+  .list-block{margin-bottom:20px;}
+  .list-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .list-head .name{font-family:'Fraunces',serif;font-size:15px;}
+  .todo{display:flex;align-items:flex-start;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
   .todo.done{opacity:0.5;}
-  .todo .check{width:20px;height:20px;border-radius:50%;border:2px solid var(--accent);flex-shrink:0;margin-top:1px;cursor:pointer;background:none;padding:0;position:relative;}
+  .todo .check{width:19px;height:19px;border-radius:50%;border:2px solid var(--accent);flex-shrink:0;margin-top:1px;cursor:pointer;background:none;padding:0;position:relative;}
   .todo.done .check{background:var(--accent);}
-  .todo.done .check::after{content:'';position:absolute;left:5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg);}
+  .todo.done .check::after{content:'';position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg);}
   .todo .body{flex:1;min-width:0;}
-  .todo .text{font-size:15px;line-height:1.4;}
+  .todo .text{font-size:14px;line-height:1.4;}
   .todo.done .text{text-decoration:line-through;}
-  .todo .meta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;}
-  .pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);}
+  .todo .meta{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;}
+  .pill{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--accent-soft);color:var(--accent);}
   .pill.due{background:var(--gold-soft);color:var(--gold);}
   .pill.overdue{background:#F5E1DC;color:var(--danger);}
-  .todo .del{border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:2px 4px;}
-  .empty{color:var(--muted);font-size:14px;padding:24px 4px;text-align:center;}
+  .todo .del{border:none;background:none;color:var(--muted);font-size:17px;cursor:pointer;line-height:1;padding:2px 4px;}
+  .new-list-btn{width:100%;background:none;border:1px dashed var(--border);border-radius:var(--radius);padding:10px;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:16px;}
+  .add-task-row{display:flex;gap:6px;margin-top:6px;}
+  .add-task-row input{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px;}
+
+  /* --- Notes --- */
   .note{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
   .note-title{font-family:'Fraunces',serif;font-size:16px;font-weight:500;border:none;background:none;width:100%;outline:none;}
-  .note-body{border:none;background:none;width:100%;font-family:inherit;font-size:14px;color:var(--ink);outline:none;resize:none;line-height:1.5;margin-top:4px;}
-  .note-foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;}
+  .note-body{border:none;background:none;width:100%;font-size:14px;outline:none;resize:vertical;line-height:1.55;margin-top:4px;min-height:70px;font-family:'SF Mono',Consolas,monospace;}
+  .note-preview{font-size:14px;line-height:1.6;margin-top:4px;}
+  .note-preview h1,.note-preview h2,.note-preview h3{font-family:'Fraunces',serif;margin:10px 0 4px;}
+  .note-preview p{margin:6px 0;}
+  .note-preview code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px;}
+  .note-preview ul,.note-preview ol{padding-left:20px;}
+  .note-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
   .note-foot .ts{font-size:11px;color:var(--muted);}
-  .note-foot .del{border:none;background:none;color:var(--muted);font-size:13px;cursor:pointer;}
   .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:5px;opacity:0;transition:opacity .3s;}
   .live-dot.on{opacity:1;}
-  .new-note-btn{width:100%;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);padding:12px;font-family:inherit;font-size:14px;color:var(--muted);cursor:pointer;margin-bottom:14px;}
+  .note-actions{display:flex;gap:6px;}
+  .new-note-btn{width:100%;background:none;border:1px dashed var(--border);border-radius:var(--radius);padding:11px;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:14px;}
+
+  /* --- Schedule --- */
+  .sched-toggle{display:flex;gap:6px;margin-bottom:14px;}
+  .gantt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .gantt-head button{border:none;background:var(--surface);border:1px solid var(--border);width:28px;height:28px;border-radius:8px;font-size:14px;cursor:pointer;}
+  .gantt-head .range{font-family:'Fraunces',serif;font-size:14px;}
+  .gantt-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
+  .gantt-days{display:grid;font-size:9px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);min-width:560px;}
+  .gantt-day-cell{padding:6px 0;border-right:1px solid var(--border);}
+  .gantt-row{display:grid;min-width:560px;border-bottom:1px solid var(--border);min-height:34px;position:relative;}
+  .gantt-row:last-child{border-bottom:none;}
+  .gantt-cell{border-right:1px solid var(--border);}
+  .gantt-bar{position:absolute;top:6px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden;}
+  .gantt-bar.high{background:var(--danger);}
+  .gantt-label{font-size:11px;padding:8px;position:sticky;left:0;background:var(--surface);}
   .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-  .cal-head button{border:none;background:var(--surface);border:1px solid var(--border);width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;color:var(--ink);}
+  .cal-head button{border:none;background:var(--surface);border:1px solid var(--border);width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;}
   .cal-head .month{font-family:'Fraunces',serif;font-size:16px;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px;}
   .cal-dow{font-size:10px;text-align:center;color:var(--muted);padding-bottom:4px;}
-  .cal-day{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;background:var(--surface);border:1px solid var(--border);cursor:pointer;position:relative;color:var(--ink);}
+  .cal-day{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;background:var(--surface);border:1px solid var(--border);cursor:pointer;position:relative;}
   .cal-day.empty{background:none;border:none;cursor:default;}
   .cal-day.today{border-color:var(--accent);color:var(--accent);font-weight:600;}
   .cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .cal-day .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);position:absolute;bottom:5px;}
   .cal-day.selected .dot{background:#fff;}
-  .cal-list-title{font-size:13px;color:var(--muted);margin-bottom:8px;}
   .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
-  .cal-todo .txt{font-size:14px;}
-  .cal-todo .who{font-size:11px;color:var(--muted);margin-top:2px;}
-  .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:12px;border-radius:7px;padding:6px 9px;cursor:pointer;font-family:inherit;white-space:nowrap;}
-  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:520px;margin:0 auto;display:flex;}
-  nav.tabs button{flex:1;border:none;background:none;padding:12px 0 10px;font-family:inherit;font-size:11px;color:var(--muted);cursor:pointer;}
+  .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:11px;border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;}
+
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:560px;margin:0 auto;display:flex;}
+  nav.tabs button{flex:1;border:none;background:none;padding:10px 0 9px;font-family:inherit;font-size:10px;color:var(--muted);cursor:pointer;}
   nav.tabs button.active{color:var(--accent);}
+
   .modal-back{position:fixed;inset:0;background:rgba(30,25,15,0.4);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px;}
   .modal{background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:340px;}
   .modal h3{font-family:'Fraunces',serif;margin:0 0 6px;font-size:18px;}
-  .modal p{font-size:13px;color:var(--muted);margin:0 0 12px;}
-  .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:15px;margin-bottom:12px;}
+  .modal p{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.5;}
+  .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;margin-bottom:12px;}
   .modal button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
   .hidden{display:none !important;}
   .setup-warning{background:#F5E1DC;color:var(--danger);border-radius:var(--radius);padding:14px;margin:18px;font-size:13px;line-height:1.5;}
@@ -84,7 +140,7 @@
   .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:340px;width:100%;}
   .auth-card h1{font-family:'Fraunces',serif;font-size:22px;margin:0 0 6px;}
   .auth-card p{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
-  .auth-card input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:15px;margin-bottom:10px;}
+  .auth-card input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;margin-bottom:10px;}
   .auth-card button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
   .auth-status{font-size:12px;color:var(--muted);margin-top:10px;text-align:center;}
 </style>
@@ -110,54 +166,80 @@
     <div class="brand">Basecamp&nbsp;Jr.</div>
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="who" id="whoBtn">···</button>
-      <button class="who" id="signOutBtn" title="Sign out">Sign out</button>
+      <button class="who" id="signOutBtn">Sign out</button>
     </div>
   </header>
 
   <main>
-    <section id="tab-todos" class="active">
-      <h2 class="section-title">Todos <span style="color:var(--muted);font-weight:400;font-size:13px;">shared with the team</span></h2>
-      <div class="add-card">
-        <input type="text" id="todoText" placeholder="Add a task…">
-        <div class="add-row">
-          <input type="text" id="todoAssignee" placeholder="Assignee" list="assigneeList">
-          <datalist id="assigneeList"></datalist>
-          <input type="date" id="todoDue">
+    <section id="tab-latest" class="active">
+      <h2 class="section-title">Latest</h2>
+      <div id="latestList"></div>
+    </section>
+
+    <section id="tab-topics">
+      <div id="topicsListView">
+        <h2 class="section-title">Topics</h2>
+        <div class="add-card">
+          <input type="text" id="newTopicTitle" placeholder="Start a new topic…">
+          <button class="btn add-btn" id="newTopicBtn">Post topic</button>
         </div>
-        <div class="add-row">
-          <select id="todoPriority">
-            <option value="normal">Normal priority</option>
-            <option value="high">High priority</option>
-          </select>
-        </div>
-        <button class="add-btn" id="addTodoBtn">Add task</button>
+        <div id="topicsList"></div>
       </div>
-      <div id="todoList"></div>
+      <div id="topicDetailView" class="hidden">
+        <button class="topic-back" id="topicBackBtn">‹ All topics</button>
+        <h2 class="section-title" id="topicDetailTitle"></h2>
+        <div id="topicMessages"></div>
+        <div class="chat-compose">
+          <textarea id="chatInput" placeholder="Write a reply…"></textarea>
+          <button class="btn" id="chatSendBtn">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-todos">
+      <h2 class="section-title">Todos</h2>
+      <button class="new-list-btn" id="newListBtn">+ New list</button>
+      <div id="listsContainer"></div>
     </section>
 
     <section id="tab-notes">
-      <h2 class="section-title">Notes <span style="color:var(--muted);font-weight:400;font-size:13px;">live, shared with the team</span></h2>
+      <h2 class="section-title">Notes <span class="sub">markdown · live</span></h2>
       <button class="new-note-btn" id="newNoteBtn">+ New note</button>
       <div id="noteList"></div>
     </section>
 
-    <section id="tab-cal">
-      <h2 class="section-title">Calendar</h2>
-      <div class="cal-head">
-        <button id="calPrev">‹</button>
-        <div class="month" id="calMonthLabel"></div>
-        <button id="calNext">›</button>
+    <section id="tab-sched">
+      <h2 class="section-title">Schedule</h2>
+      <div class="sched-toggle">
+        <button class="btn-ghost on" id="showGanttBtn">Timeline</button>
+        <button class="btn-ghost" id="showCalBtn">Month</button>
       </div>
-      <div class="cal-grid" id="calGrid"></div>
-      <div class="cal-list-title" id="calListTitle"></div>
-      <div id="calList"></div>
+      <div id="ganttView">
+        <div class="gantt-head">
+          <button id="ganttPrev">‹</button>
+          <div class="range" id="ganttRange"></div>
+          <button id="ganttNext">›</button>
+        </div>
+        <div class="gantt-wrap"><div id="ganttInner"></div></div>
+      </div>
+      <div id="calView" class="hidden">
+        <div class="cal-head">
+          <button id="calPrev">‹</button>
+          <div class="month" id="calMonthLabel"></div>
+          <button id="calNext">›</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div id="calList"></div>
+      </div>
     </section>
   </main>
 
   <nav class="tabs">
-    <button data-tab="todos" class="active">✓ Todos</button>
+    <button data-tab="latest" class="active">⚡ Latest</button>
+    <button data-tab="topics">☰ Topics</button>
+    <button data-tab="todos">✓ Todos</button>
     <button data-tab="notes">✎ Notes</button>
-    <button data-tab="cal">▦ Calendar</button>
+    <button data-tab="sched">▦ Schedule</button>
   </nav>
 </div>
 
@@ -173,8 +255,8 @@
 <script>
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 // Use the PUBLISHABLE key (starts with sb_publishable_...), never the secret key.
-const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MfDYPsXWX9tPFguJDRcTIw_9o3rd47A";
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "YOUR-PUBLISHABLE-KEY";
 // =================================================
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT");
@@ -183,18 +265,39 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
 (function(){
   let myName = localStorage.getItem('bcjr-name') || '';
+  let projectId = null;
+  let todoLists = [];
   let todos = [];
+  let topics = [];
+  let messages = [];
   let notes = [];
+  let selectedTopicId = null;
+  let noteMode = {}; // id -> 'edit' | 'preview'
   let calDate = new Date();
   let selectedDay = null;
-  const focusedFields = new Set(); // ids currently being typed in, so remote updates don't clobber
+  let ganttStart = startOfWeek(new Date());
+  const GANTT_DAYS = 14;
+  const focusedFields = new Set();
 
   const $ = id => document.getElementById(id);
   const pad = n => n<10?'0'+n:n;
   const todayStr = () => new Date().toISOString().slice(0,10);
+  const timeAgo = iso => {
+    const s = Math.floor((Date.now() - new Date(iso).getTime())/1000);
+    if(s<60) return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  };
+  function startOfWeek(d){
+    const nd = new Date(d);
+    nd.setDate(nd.getDate() - nd.getDay());
+    nd.setHours(0,0,0,0);
+    return nd;
+  }
+  function dstr(d){ return d.toISOString().slice(0,10); }
 
   if(!myName){ $('nameModal').classList.remove('hidden'); }
-
   $('whoBtn').addEventListener('click', ()=>{
     $('nameInput').value = myName;
     $('nameModal').classList.remove('hidden');
@@ -213,11 +316,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
       btn.classList.add('active');
       $('tab-'+btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab==='cal') renderCalendar();
+      if(btn.dataset.tab==='sched'){ renderGantt(); renderCalendar(); }
     });
   });
 
-  if(!isConfigured) return; // stop here; nothing to load without credentials
+  if(!isConfigured) return;
 
   // ---------- Auth gate ----------
   let appInitialized = false;
@@ -227,15 +330,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('appRoot').classList.remove('hidden');
     if(!appInitialized){
       appInitialized = true;
-      loadTodos();
-      loadNotes();
-      renderCalendar();
-      sb.channel('todos-live')
-        .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, loadTodos)
-        .subscribe();
-      sb.channel('notes-live')
-        .on('postgres_changes', { event:'*', schema:'public', table:'notes' }, ()=>loadNotes())
-        .subscribe();
+      bootstrap();
     }
   }
   function showAuth(){
@@ -249,10 +344,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('authStatus').textContent = 'Sending…';
     const { error } = await sb.auth.signInWithOtp({
       email,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: window.location.origin + window.location.pathname
-      }
+      options: { shouldCreateUser:false, emailRedirectTo: window.location.origin + window.location.pathname }
     });
     $('authStatus').textContent = error ? error.message : 'Check your email for the link.';
   });
@@ -264,89 +356,239 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   sb.auth.onAuthStateChange((_event, session)=>{
     if(session) showApp(); else showAuth();
   });
-
   (async ()=>{
     const { data } = await sb.auth.getSession();
     if(data.session) showApp(); else showAuth();
   })();
 
-  // ---------- Todos ----------
-  async function loadTodos(){
-    const { data, error } = await sb.from('todos').select('*').order('created_at', {ascending:false});
-    if(!error) todos = data || [];
-    renderTodos();
+  // ---------- Bootstrap ----------
+  async function bootstrap(){
+    const { data: proj } = await sb.from('projects').select('*').limit(1);
+    projectId = proj && proj[0] ? proj[0].id : null;
+
+    await Promise.all([loadTodoLists(), loadTodos(), loadTopics(), loadMessages(), loadNotes()]);
+    renderAll();
+
+    sb.channel('db-live')
+      .on('postgres_changes', { event:'*', schema:'public', table:'todo_lists' }, async ()=>{ await loadTodoLists(); renderTodos(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderCalendar(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'topics' }, async ()=>{ await loadTopics(); renderTopics(); renderLatest(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'messages' }, async ()=>{ await loadMessages(); renderTopicDetail(); renderLatest(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'notes' }, async ()=>{ await loadNotes(); renderNotes(); renderLatest(); })
+      .subscribe();
   }
 
-  $('addTodoBtn').addEventListener('click', async ()=>{
-    const text = $('todoText').value.trim();
-    if(!text) return;
-    const { error } = await sb.from('todos').insert({
-      text,
-      assignee: $('todoAssignee').value.trim() || null,
-      due: $('todoDue').value || null,
-      priority: $('todoPriority').value,
-      done: false
+  function renderAll(){
+    renderLatest(); renderTopics(); renderTodos(); renderNotes(); renderGantt(); renderCalendar();
+  }
+
+  // ================= LATEST =================
+  function renderLatest(){
+    const items = [];
+    todos.forEach(t=>{
+      items.push({ ts:t.created_at, icon:'✓', txt:`${t.done?'Completed':'Added'}: "${t.text}"`, who:t.assignee||'' });
     });
-    if(error) console.error(error);
-    $('todoText').value=''; $('todoAssignee').value=''; $('todoDue').value='';
+    topics.forEach(t=>{
+      items.push({ ts:t.created_at, icon:'☰', txt:`New topic: "${t.title}"`, who:t.created_by||'' });
+    });
+    messages.forEach(m=>{
+      const topic = topics.find(t=>t.id===m.topic_id);
+      items.push({ ts:m.created_at, icon:'💬', txt:`Replied in "${topic?topic.title:'a topic'}"`, who:m.created_by||'' });
+    });
+    notes.forEach(n=>{
+      items.push({ ts:n.updated_at, icon:'✎', txt:`Updated note "${n.title||'Untitled'}"`, who:n.updated_by||'' });
+    });
+    items.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
+    const list = $('latestList');
+    list.innerHTML = '';
+    if(items.length===0){ list.innerHTML = '<div class="empty">Nothing yet — add a task, note, or topic to get started.</div>'; return; }
+    items.slice(0,40).forEach(it=>{
+      const row = document.createElement('div');
+      row.className = 'feed-item';
+      row.innerHTML = `<div class="feed-icon">${it.icon}</div><div class="feed-body"><div class="txt"></div><div class="meta">${it.who?it.who+' · ':''}${timeAgo(it.ts)}</div></div>`;
+      row.querySelector('.txt').textContent = it.txt;
+      list.appendChild(row);
+    });
+  }
+
+  // ================= TOPICS =================
+  async function loadTopics(){
+    const { data } = await sb.from('topics').select('*').order('created_at', {ascending:false});
+    topics = data || [];
+  }
+  async function loadMessages(){
+    const { data } = await sb.from('messages').select('*').order('created_at', {ascending:true});
+    messages = data || [];
+  }
+
+  $('newTopicBtn').addEventListener('click', async ()=>{
+    const title = $('newTopicTitle').value.trim();
+    if(!title) return;
+    await sb.from('topics').insert({ project_id: projectId, title, created_by: myName });
+    $('newTopicTitle').value = '';
+  });
+
+  function renderTopics(){
+    const list = $('topicsList');
+    list.innerHTML = '';
+    if(topics.length===0){ list.innerHTML = '<div class="empty">No topics yet. Start the first conversation above.</div>'; return; }
+    topics.forEach(t=>{
+      const count = messages.filter(m=>m.topic_id===t.id).length;
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.innerHTML = `<div><div class="title"></div><div class="meta">${count} repl${count===1?'y':'ies'} · ${t.created_by||'Unknown'} · ${timeAgo(t.created_at)}</div></div><div class="arrow">›</div>`;
+      row.querySelector('.title').textContent = t.title;
+      row.addEventListener('click', ()=>openTopic(t.id));
+      list.appendChild(row);
+    });
+  }
+
+  function openTopic(id){
+    selectedTopicId = id;
+    $('topicsListView').classList.add('hidden');
+    $('topicDetailView').classList.remove('hidden');
+    renderTopicDetail();
+  }
+  $('topicBackBtn').addEventListener('click', ()=>{
+    selectedTopicId = null;
+    $('topicDetailView').classList.add('hidden');
+    $('topicsListView').classList.remove('hidden');
+  });
+
+  function renderTopicDetail(){
+    if(!selectedTopicId) return;
+    const topic = topics.find(t=>t.id===selectedTopicId);
+    if(!topic){ $('topicBackBtn').click(); return; }
+    $('topicDetailTitle').textContent = topic.title;
+    const box = $('topicMessages');
+    box.innerHTML = '';
+    const msgs = messages.filter(m=>m.topic_id===selectedTopicId);
+    if(msgs.length===0){ box.innerHTML = '<div class="empty">No replies yet.</div>'; }
+    msgs.forEach(m=>{
+      const el = document.createElement('div');
+      el.className = 'chat-msg';
+      el.innerHTML = `<div class="who"></div><div class="body"></div><div class="ts">${timeAgo(m.created_at)}</div>`;
+      el.querySelector('.who').textContent = m.created_by || 'Unknown';
+      el.querySelector('.body').textContent = m.body;
+      box.appendChild(el);
+    });
+  }
+
+  $('chatSendBtn').addEventListener('click', async ()=>{
+    const body = $('chatInput').value.trim();
+    if(!body || !selectedTopicId) return;
+    await sb.from('messages').insert({ topic_id: selectedTopicId, body, created_by: myName });
+    $('chatInput').value = '';
+  });
+
+  // ================= TODOS =================
+  async function loadTodoLists(){
+    const { data } = await sb.from('todo_lists').select('*').order('position', {ascending:true});
+    todoLists = data || [];
+  }
+  async function loadTodos(){
+    const { data } = await sb.from('todos').select('*').order('created_at', {ascending:false});
+    todos = data || [];
+  }
+
+  $('newListBtn').addEventListener('click', async ()=>{
+    const name = prompt('List name (e.g. "This week", "Marketing")');
+    if(!name || !name.trim()) return;
+    await sb.from('todo_lists').insert({ project_id: projectId, name: name.trim(), position: todoLists.length });
   });
 
   function renderTodos(){
-    const list = $('todoList');
-    list.innerHTML = '';
-    const names = Array.from(new Set(todos.map(t=>t.assignee).filter(Boolean)));
-    $('assigneeList').innerHTML = names.map(n=>`<option value="${n}">`).join('');
+    const container = $('listsContainer');
+    container.innerHTML = '';
+    const allNames = Array.from(new Set(todos.map(t=>t.assignee).filter(Boolean)));
 
-    if(todos.length===0){ list.innerHTML = '<div class="empty">No tasks yet. Add the first one above.</div>'; return; }
-    const today = todayStr();
-    const open = todos.filter(t=>!t.done).sort((a,b)=>{
-      if(a.due && b.due) return a.due.localeCompare(b.due);
-      if(a.due) return -1;
-      if(b.due) return 1;
-      return new Date(b.created_at)-new Date(a.created_at);
-    });
-    const done = todos.filter(t=>t.done).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const groups = { overdue:[], today:[], upcoming:[], none:[] };
-    open.forEach(t=>{
-      if(!t.due) groups.none.push(t);
-      else if(t.due < today) groups.overdue.push(t);
-      else if(t.due === today) groups.today.push(t);
-      else groups.upcoming.push(t);
-    });
-    const renderGroup = (label, arr) => {
-      if(arr.length===0) return;
-      const h = document.createElement('div'); h.className='group-label'; h.textContent=label;
-      list.appendChild(h);
-      arr.forEach(t=>list.appendChild(todoRow(t)));
-    };
-    renderGroup('Overdue', groups.overdue);
-    renderGroup('Today', groups.today);
-    renderGroup('Upcoming', groups.upcoming);
-    renderGroup('No due date', groups.none);
-    if(done.length){
-      const h = document.createElement('div'); h.className='group-label'; h.textContent='Done';
-      list.appendChild(h);
-      done.slice(0,10).forEach(t=>list.appendChild(todoRow(t)));
+    const groupsToRender = [...todoLists.map(l=>({ list:l, items: todos.filter(t=>t.list_id===l.id) }))];
+    const unsorted = todos.filter(t=>!t.list_id);
+    groupsToRender.push({ list:{ id:null, name:'Unsorted' }, items: unsorted });
+
+    if(todos.length===0 && todoLists.length===0){
+      container.innerHTML = '<div class="empty">No lists yet. Tap "+ New list" above to start.</div>';
+      return;
     }
+
+    groupsToRender.forEach(g=>{
+      if(g.list.id===null && g.items.length===0) return;
+      const block = document.createElement('div');
+      block.className = 'list-block';
+      const openCount = g.items.filter(t=>!t.done).length;
+      block.innerHTML = `
+        <div class="list-head">
+          <div class="name"></div>
+          <span class="pill">${openCount} open</span>
+        </div>
+        <div class="items"></div>
+        <div class="add-task-row">
+          <input type="text" placeholder="Add a task…" class="task-text">
+          <input type="text" placeholder="Assignee" class="task-assignee" list="assigneeDatalist">
+          <input type="date" class="task-start">
+          <input type="date" class="task-end">
+          <select class="task-priority"><option value="normal">Normal</option><option value="high">High</option></select>
+          <button class="btn task-add">Add</button>
+        </div>`;
+      block.querySelector('.name').textContent = g.list.name;
+      const itemsBox = block.querySelector('.items');
+      const sorted = [...g.items].sort((a,b)=>{
+        if(a.done!==b.done) return a.done?1:-1;
+        if(a.start_date && b.start_date) return a.start_date.localeCompare(b.start_date);
+        if(a.start_date) return -1;
+        if(b.start_date) return 1;
+        return new Date(b.created_at)-new Date(a.created_at);
+      });
+      if(sorted.length===0){ itemsBox.innerHTML = '<div class="empty">No tasks in this list.</div>'; }
+      sorted.forEach(t=>itemsBox.appendChild(todoRow(t)));
+
+      block.querySelector('.task-add').addEventListener('click', async ()=>{
+        const text = block.querySelector('.task-text').value.trim();
+        if(!text) return;
+        const start = block.querySelector('.task-start').value || null;
+        let end = block.querySelector('.task-end').value || null;
+        if(start && !end) end = start;
+        await sb.from('todos').insert({
+          project_id: projectId,
+          list_id: g.list.id,
+          text,
+          assignee: block.querySelector('.task-assignee').value.trim() || null,
+          start_date: start, end_date: end,
+          priority: block.querySelector('.task-priority').value,
+          done: false
+        });
+        block.querySelector('.task-text').value = '';
+        block.querySelector('.task-assignee').value = '';
+        block.querySelector('.task-start').value = '';
+        block.querySelector('.task-end').value = '';
+      });
+      container.appendChild(block);
+    });
+
+    let dl = document.getElementById('assigneeDatalist');
+    if(!dl){ dl = document.createElement('datalist'); dl.id='assigneeDatalist'; document.body.appendChild(dl); }
+    dl.innerHTML = allNames.map(n=>`<option value="${n}">`).join('');
   }
 
   function todoRow(t){
     const row = document.createElement('div');
     row.className = 'todo' + (t.done?' done':'');
     const today = todayStr();
-    let duePill = '';
-    if(t.due){
-      const cls = (!t.done && t.due < today) ? 'overdue' : 'due';
-      duePill = `<span class="pill ${cls}">${t.due===today?'Today':t.due}</span>`;
+    let datePill = '';
+    if(t.start_date){
+      const end = t.end_date || t.start_date;
+      const cls = (!t.done && end < today) ? 'overdue' : 'due';
+      const label = t.start_date===end ? t.start_date : `${t.start_date} → ${end}`;
+      datePill = `<span class="pill ${cls}">${label}</span>`;
     }
     row.innerHTML = `
       <button class="check"></button>
       <div class="body">
         <div class="text"></div>
         <div class="meta">
-          <span class="pill">${t.assignee||'Unassigned'}</span>
+          ${t.assignee?`<span class="pill">${t.assignee}</span>`:''}
           ${t.priority==='high' ? '<span class="pill overdue">High</span>' : ''}
-          ${duePill}
+          ${datePill}
         </div>
       </div>
       <button class="del">×</button>`;
@@ -360,14 +602,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     return row;
   }
 
-  // ---------- Load + subscribe: Notes (live editing) ----------
+  // ================= NOTES =================
   async function loadNotes(){
-    const { data, error } = await sb.from('notes').select('*').order('updated_at', {ascending:false});
-    if(!error) notes = data || [];
-    renderNotes();
+    const { data } = await sb.from('notes').select('*').order('updated_at', {ascending:false});
+    notes = data || [];
   }
   $('newNoteBtn').addEventListener('click', async ()=>{
-    await sb.from('notes').insert({ title:'', body:'', updated_by: myName });
+    await sb.from('notes').insert({ project_id: projectId, title:'', body:'', updated_by: myName });
   });
 
   function renderNotes(){
@@ -375,22 +616,28 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     list.innerHTML = '';
     if(notes.length===0){ list.innerHTML = '<div class="empty">No notes yet.</div>'; return; }
     notes.forEach(n=>{
+      const mode = noteMode[n.id] || 'edit';
       const titleFocusId = 'title-'+n.id, bodyFocusId = 'body-'+n.id;
       const card = document.createElement('div');
       card.className = 'note';
       const d = new Date(n.updated_at);
       card.innerHTML = `
         <input class="note-title" placeholder="Untitled" />
-        <textarea class="note-body" placeholder="Write something…" rows="3"></textarea>
+        <textarea class="note-body ${mode==='preview'?'hidden':''}" placeholder="Write in markdown…" rows="4"></textarea>
+        <div class="note-preview ${mode==='preview'?'':'hidden'}"></div>
         <div class="note-foot">
           <span class="ts"><span class="live-dot" id="dot-${n.id}"></span>${n.updated_by?n.updated_by+' · ':''}${d.toLocaleDateString()} ${pad(d.getHours())}:${pad(d.getMinutes())}</span>
-          <button class="del">Delete</button>
+          <div class="note-actions">
+            <button class="btn-ghost toggle-mode">${mode==='preview'?'Edit':'Preview'}</button>
+            <button class="btn-ghost del">Delete</button>
+          </div>
         </div>`;
       const titleEl = card.querySelector('.note-title');
       const bodyEl = card.querySelector('.note-body');
-      // don't overwrite what THIS user is actively typing
+      const previewEl = card.querySelector('.note-preview');
       if(!focusedFields.has(titleFocusId)) titleEl.value = n.title;
       if(!focusedFields.has(bodyFocusId)) bodyEl.value = n.body;
+      try{ previewEl.innerHTML = window.marked ? marked.parse(n.body||'') : (n.body||''); }catch(e){ previewEl.textContent = n.body||''; }
 
       let saveTimer;
       const debSave = () => {
@@ -410,6 +657,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       bodyEl.addEventListener('blur', ()=>focusedFields.delete(bodyFocusId));
       titleEl.addEventListener('input', debSave);
       bodyEl.addEventListener('input', debSave);
+      card.querySelector('.toggle-mode').addEventListener('click', ()=>{
+        noteMode[n.id] = mode==='preview' ? 'edit' : 'preview';
+        renderNotes();
+      });
       card.querySelector('.del').addEventListener('click', async ()=>{
         await sb.from('notes').delete().eq('id', n.id);
       });
@@ -417,7 +668,64 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     });
   }
 
-  // ---------- Calendar ----------
+  // ================= SCHEDULE: GANTT =================
+  $('showGanttBtn').addEventListener('click', ()=>{
+    $('showGanttBtn').classList.add('on'); $('showCalBtn').classList.remove('on');
+    $('ganttView').classList.remove('hidden'); $('calView').classList.add('hidden');
+  });
+  $('showCalBtn').addEventListener('click', ()=>{
+    $('showCalBtn').classList.add('on'); $('showGanttBtn').classList.remove('on');
+    $('calView').classList.remove('hidden'); $('ganttView').classList.add('hidden');
+  });
+  $('ganttPrev').addEventListener('click', ()=>{ ganttStart.setDate(ganttStart.getDate()-GANTT_DAYS); renderGantt(); });
+  $('ganttNext').addEventListener('click', ()=>{ ganttStart.setDate(ganttStart.getDate()+GANTT_DAYS); renderGantt(); });
+
+  function renderGantt(){
+    const days = [];
+    for(let i=0;i<GANTT_DAYS;i++){ const d = new Date(ganttStart); d.setDate(d.getDate()+i); days.push(d); }
+    $('ganttRange').textContent = `${days[0].toLocaleDateString(undefined,{month:'short',day:'numeric'})} – ${days[GANTT_DAYS-1].toLocaleDateString(undefined,{month:'short',day:'numeric'})}`;
+
+    const inner = $('ganttInner');
+    inner.innerHTML = '';
+    const dayRow = document.createElement('div');
+    dayRow.className = 'gantt-days';
+    dayRow.style.gridTemplateColumns = `130px repeat(${GANTT_DAYS}, 1fr)`;
+    dayRow.innerHTML = '<div></div>' + days.map(d=>`<div class="gantt-day-cell">${d.toLocaleDateString(undefined,{weekday:'short'})}<br>${d.getDate()}</div>`).join('');
+    inner.appendChild(dayRow);
+
+    const scheduled = todos.filter(t=>t.start_date);
+    if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; return; }
+
+    scheduled.forEach(t=>{
+      const row = document.createElement('div');
+      row.className = 'gantt-row';
+      row.style.gridTemplateColumns = `130px repeat(${GANTT_DAYS}, 1fr)`;
+      const label = document.createElement('div');
+      label.className = 'gantt-label';
+      label.textContent = t.text;
+      row.appendChild(label);
+      for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'; row.appendChild(c); }
+
+      const start = new Date(t.start_date+'T00:00:00');
+      const end = new Date((t.end_date||t.start_date)+'T00:00:00');
+      const viewStart = days[0], viewEnd = days[GANTT_DAYS-1];
+      if(end < viewStart || start > viewEnd){ inner.appendChild(row); return; }
+      const clipStart = start < viewStart ? viewStart : start;
+      const clipEnd = end > viewEnd ? viewEnd : end;
+      const startOffset = Math.round((clipStart - viewStart)/86400000);
+      const span = Math.round((clipEnd - clipStart)/86400000) + 1;
+      const bar = document.createElement('div');
+      bar.className = 'gantt-bar' + (t.priority==='high' ? ' high' : '');
+      bar.style.left = `calc(130px + ${startOffset} * (100% - 130px)/${GANTT_DAYS})`;
+      bar.style.width = `calc(${span} * (100% - 130px)/${GANTT_DAYS} - 4px)`;
+      bar.textContent = t.text;
+      row.style.position = 'relative';
+      row.appendChild(bar);
+      inner.appendChild(row);
+    });
+  }
+
+  // ================= SCHEDULE: MONTH CALENDAR =================
   function renderCalendar(){
     const y = calDate.getFullYear(), m = calDate.getMonth();
     $('calMonthLabel').textContent = calDate.toLocaleDateString(undefined,{month:'long', year:'numeric'});
@@ -429,7 +737,14 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const firstDow = new Date(y,m,1).getDay();
     const daysInMonth = new Date(y,m+1,0).getDate();
     const today = todayStr();
-    const dueDates = new Set(todos.filter(t=>t.due && !t.done).map(t=>t.due));
+    const dueDates = new Set();
+    todos.forEach(t=>{
+      if(!t.start_date) return;
+      const end = t.end_date || t.start_date;
+      let d = new Date(t.start_date+'T00:00:00');
+      const endD = new Date(end+'T00:00:00');
+      while(d<=endD){ dueDates.add(dstr(d)); d.setDate(d.getDate()+1); }
+    });
     for(let i=0;i<firstDow;i++){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); }
     for(let d=1; d<=daysInMonth; d++){
       const dateStr = `${y}-${pad(m+1)}-${pad(d)}`;
@@ -444,27 +759,30 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   }
 
   function renderCalList(){
-    const title = $('calListTitle');
     const list = $('calList');
     list.innerHTML = '';
-    const dayTodos = todos.filter(t=>t.due===selectedDay);
-    const label = selectedDay===todayStr() ? 'Today' : new Date(selectedDay+'T00:00:00').toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
-    title.textContent = `${label} · ${dayTodos.length} task${dayTodos.length===1?'':'s'}`;
-    if(dayTodos.length===0){ list.innerHTML = '<div class="empty">Nothing due this day.</div>'; return; }
+    const dayTodos = todos.filter(t=>{
+      if(!t.start_date) return false;
+      const end = t.end_date || t.start_date;
+      return t.start_date <= selectedDay && selectedDay <= end;
+    });
+    if(dayTodos.length===0){ list.innerHTML = '<div class="empty">Nothing scheduled this day.</div>'; return; }
     dayTodos.forEach(t=>{
       const row = document.createElement('div');
       row.className='cal-todo';
-      row.innerHTML = `<div><div class="txt"></div><div class="who">${t.assignee||'Unassigned'}</div></div><button class="cal-add">Add to calendar</button>`;
-      row.querySelector('.txt').textContent = t.text;
+      row.innerHTML = `<div><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'}</div></div><button class="cal-add">Add to calendar</button>`;
+      row.querySelector('div > div').textContent = t.text;
       row.querySelector('.cal-add').addEventListener('click', ()=>downloadICS(t));
       list.appendChild(row);
     });
   }
 
   function downloadICS(t){
-    const dateDigits = t.due.replace(/-/g,'');
+    const start = t.start_date.replace(/-/g,'');
+    const endD = new Date((t.end_date||t.start_date)+'T00:00:00'); endD.setDate(endD.getDate()+1);
+    const end = dstr(endD).replace(/-/g,'');
     const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Basecamp Jr//EN','BEGIN:VEVENT',
-      `UID:${t.id}@basecampjr`,`DTSTAMP:${dateDigits}T090000Z`,`DTSTART;VALUE=DATE:${dateDigits}`,
+      `UID:${t.id}@basecampjr`,`DTSTAMP:${start}T090000Z`,`DTSTART;VALUE=DATE:${start}`,`DTEND;VALUE=DATE:${end}`,
       `SUMMARY:${(t.text||'Task').replace(/\n/g,' ')}`,`DESCRIPTION:Assigned to ${t.assignee||'Unassigned'}`,
       'END:VEVENT','END:VCALENDAR'].join('\r\n');
     const blob = new Blob([ics], {type:'text/calendar'});
