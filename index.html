@@ -80,18 +80,38 @@
   .modal button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
   .hidden{display:none;}
   .setup-warning{background:#F5E1DC;color:var(--danger);border-radius:var(--radius);padding:14px;margin:18px;font-size:13px;line-height:1.5;}
+  .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:340px;width:100%;}
+  .auth-card h1{font-family:'Fraunces',serif;font-size:22px;margin:0 0 6px;}
+  .auth-card p{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
+  .auth-card input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:15px;margin-bottom:10px;}
+  .auth-card button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
+  .auth-status{font-size:12px;color:var(--muted);margin-top:10px;text-align:center;}
 </style>
 </head>
 <body>
 
 <div id="setupWarning" class="setup-warning hidden">
-  <strong>Not connected yet.</strong> Open this file and replace <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script with your own project's values from Supabase → Settings → API.
+  <strong>Not connected yet.</strong> Open this file and replace <code>SUPABASE_URL</code> and <code>SUPABASE_PUBLISHABLE_KEY</code> near the top of the script with your own project's values from Supabase → Settings → API Keys. Use the <strong>publishable</strong> key only — never the secret key.
 </div>
 
-<div class="app">
+<div id="authScreen" class="auth-screen hidden">
+  <div class="auth-card">
+    <h1>Basecamp&nbsp;Jr.</h1>
+    <p>Sign in with your team email. You'll get a one-time link — no password needed. Only teammates who've been invited can sign in.</p>
+    <input type="email" id="authEmail" placeholder="you@company.com" autocomplete="email">
+    <button id="authSendBtn">Send magic link</button>
+    <div class="auth-status" id="authStatus"></div>
+  </div>
+</div>
+
+<div class="app hidden" id="appRoot">
   <header>
     <div class="brand">Basecamp&nbsp;Jr.</div>
-    <button class="who" id="whoBtn">···</button>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="who" id="whoBtn">···</button>
+      <button class="who" id="signOutBtn" title="Sign out">Sign out</button>
+    </div>
   </header>
 
   <main>
@@ -152,13 +172,14 @@
 
 <script>
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
+// Use the PUBLISHABLE key (starts with sb_publishable_...), never the secret key.
 const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+const SUPABASE_PUBLISHABLE_KEY = "YOUR-PUBLISHABLE-KEY";
 // =================================================
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT");
 if(!isConfigured) document.getElementById('setupWarning').classList.remove('hidden');
-const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
 
 (function(){
   let myName = localStorage.getItem('bcjr-name') || '';
@@ -198,15 +219,55 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   if(!isConfigured) return; // stop here; nothing to load without credentials
 
-  // ---------- Load + subscribe: Todos ----------
+  // ---------- Auth gate ----------
+  let appInitialized = false;
+
+  function showApp(){
+    $('authScreen').classList.add('hidden');
+    $('appRoot').classList.remove('hidden');
+    if(!appInitialized){
+      appInitialized = true;
+      loadTodos();
+      loadNotes();
+      renderCalendar();
+      sb.channel('todos-live')
+        .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, loadTodos)
+        .subscribe();
+      sb.channel('notes-live')
+        .on('postgres_changes', { event:'*', schema:'public', table:'notes' }, ()=>loadNotes())
+        .subscribe();
+    }
+  }
+  function showAuth(){
+    $('appRoot').classList.add('hidden');
+    $('authScreen').classList.remove('hidden');
+  }
+
+  $('authSendBtn').addEventListener('click', async ()=>{
+    const email = $('authEmail').value.trim();
+    if(!email) return;
+    $('authStatus').textContent = 'Sending…';
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ shouldCreateUser:false } });
+    $('authStatus').textContent = error ? error.message : 'Check your email for the link.';
+  });
+
+  $('signOutBtn').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+  });
+
+  sb.auth.onAuthStateChange((_event, session)=>{
+    if(session) showApp(); else showAuth();
+  });
+  sb.auth.getSession().then(({data})=>{
+    if(data.session) showApp(); else showAuth();
+  });
+
+  // ---------- Todos ----------
   async function loadTodos(){
     const { data, error } = await sb.from('todos').select('*').order('created_at', {ascending:false});
     if(!error) todos = data || [];
     renderTodos();
   }
-  sb.channel('todos-live')
-    .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, loadTodos)
-    .subscribe();
 
   $('addTodoBtn').addEventListener('click', async ()=>{
     const text = $('todoText').value.trim();
@@ -297,13 +358,6 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     if(!error) notes = data || [];
     renderNotes();
   }
-  sb.channel('notes-live')
-    .on('postgres_changes', { event:'*', schema:'public', table:'notes' }, payload=>{
-      // merge instead of full re-render so we don't clobber a field someone's actively typing in
-      loadNotes();
-    })
-    .subscribe();
-
   $('newNoteBtn').addEventListener('click', async ()=>{
     await sb.from('notes').insert({ title:'', body:'', updated_by: myName });
   });
@@ -415,10 +469,6 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   $('calPrev').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); });
   $('calNext').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); });
-
-  loadTodos();
-  loadNotes();
-  renderCalendar();
 })();
 </script>
 </body>
