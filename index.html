@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Basecamp Jr.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#FAF8F3; --surface:#FFFFFF; --ink:#20261F; --muted:#7C7568;
+    --accent:#3A6B63; --accent-soft:#DEEAE6; --gold:#B08600; --gold-soft:#F3E9CC;
+    --border:#E4E0D3; --danger:#B5533E; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:72px;}
+  header{padding:22px 18px 14px;display:flex;align-items:baseline;justify-content:space-between;}
+  header .brand{font-family:'Fraunces',serif;font-size:22px;font-weight:600;letter-spacing:-0.01em;}
+  header .who{font-size:13px;color:var(--muted);background:none;border:none;font-family:inherit;cursor:pointer;padding:4px;}
+  main{flex:1;padding:0 18px 24px;}
+  section{display:none;}
+  section.active{display:block;}
+  h2.section-title{font-family:'Fraunces',serif;font-size:18px;font-weight:500;margin:4px 0 14px;}
+  .add-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:18px;}
+  .add-card input[type=text]{width:100%;border:none;font-family:inherit;font-size:15px;color:var(--ink);outline:none;background:transparent;}
+  .add-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .add-row select, .add-row input[type=date]{flex:1;min-width:100px;border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--bg);}
+  .add-btn{width:100%;margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;}
+  .group-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin:18px 0 8px;}
+  .group-label:first-of-type{margin-top:0;}
+  .todo{display:flex;align-items:flex-start;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;margin-bottom:8px;}
+  .todo.done{opacity:0.5;}
+  .todo .check{width:20px;height:20px;border-radius:50%;border:2px solid var(--accent);flex-shrink:0;margin-top:1px;cursor:pointer;background:none;padding:0;position:relative;}
+  .todo.done .check{background:var(--accent);}
+  .todo.done .check::after{content:'';position:absolute;left:5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg);}
+  .todo .body{flex:1;min-width:0;}
+  .todo .text{font-size:15px;line-height:1.4;}
+  .todo.done .text{text-decoration:line-through;}
+  .todo .meta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);}
+  .pill.due{background:var(--gold-soft);color:var(--gold);}
+  .pill.overdue{background:#F5E1DC;color:var(--danger);}
+  .todo .del{border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:2px 4px;}
+  .empty{color:var(--muted);font-size:14px;padding:24px 4px;text-align:center;}
+  .note{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
+  .note-title{font-family:'Fraunces',serif;font-size:16px;font-weight:500;border:none;background:none;width:100%;outline:none;}
+  .note-body{border:none;background:none;width:100%;font-family:inherit;font-size:14px;color:var(--ink);outline:none;resize:none;line-height:1.5;margin-top:4px;}
+  .note-foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;}
+  .note-foot .ts{font-size:11px;color:var(--muted);}
+  .note-foot .del{border:none;background:none;color:var(--muted);font-size:13px;cursor:pointer;}
+  .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:5px;opacity:0;transition:opacity .3s;}
+  .live-dot.on{opacity:1;}
+  .new-note-btn{width:100%;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);padding:12px;font-family:inherit;font-size:14px;color:var(--muted);cursor:pointer;margin-bottom:14px;}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .cal-head button{border:none;background:var(--surface);border:1px solid var(--border);width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;color:var(--ink);}
+  .cal-head .month{font-family:'Fraunces',serif;font-size:16px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px;}
+  .cal-dow{font-size:10px;text-align:center;color:var(--muted);padding-bottom:4px;}
+  .cal-day{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;background:var(--surface);border:1px solid var(--border);cursor:pointer;position:relative;color:var(--ink);}
+  .cal-day.empty{background:none;border:none;cursor:default;}
+  .cal-day.today{border-color:var(--accent);color:var(--accent);font-weight:600;}
+  .cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .cal-day .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);position:absolute;bottom:5px;}
+  .cal-day.selected .dot{background:#fff;}
+  .cal-list-title{font-size:13px;color:var(--muted);margin-bottom:8px;}
+  .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
+  .cal-todo .txt{font-size:14px;}
+  .cal-todo .who{font-size:11px;color:var(--muted);margin-top:2px;}
+  .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:12px;border-radius:7px;padding:6px 9px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:520px;margin:0 auto;display:flex;}
+  nav.tabs button{flex:1;border:none;background:none;padding:12px 0 10px;font-family:inherit;font-size:11px;color:var(--muted);cursor:pointer;}
+  nav.tabs button.active{color:var(--accent);}
+  .modal-back{position:fixed;inset:0;background:rgba(30,25,15,0.4);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px;}
+  .modal{background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:340px;}
+  .modal h3{font-family:'Fraunces',serif;margin:0 0 6px;font-size:18px;}
+  .modal p{font-size:13px;color:var(--muted);margin:0 0 12px;}
+  .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:15px;margin-bottom:12px;}
+  .modal button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
+  .hidden{display:none;}
+  .setup-warning{background:#F5E1DC;color:var(--danger);border-radius:var(--radius);padding:14px;margin:18px;font-size:13px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<div id="setupWarning" class="setup-warning hidden">
+  <strong>Not connected yet.</strong> Open this file and replace <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script with your own project's values from Supabase → Settings → API.
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">Basecamp&nbsp;Jr.</div>
+    <button class="who" id="whoBtn">···</button>
+  </header>
+
+  <main>
+    <section id="tab-todos" class="active">
+      <h2 class="section-title">Todos <span style="color:var(--muted);font-weight:400;font-size:13px;">shared with the team</span></h2>
+      <div class="add-card">
+        <input type="text" id="todoText" placeholder="Add a task…">
+        <div class="add-row">
+          <input type="text" id="todoAssignee" placeholder="Assignee" list="assigneeList">
+          <datalist id="assigneeList"></datalist>
+          <input type="date" id="todoDue">
+        </div>
+        <div class="add-row">
+          <select id="todoPriority">
+            <option value="normal">Normal priority</option>
+            <option value="high">High priority</option>
+          </select>
+        </div>
+        <button class="add-btn" id="addTodoBtn">Add task</button>
+      </div>
+      <div id="todoList"></div>
+    </section>
+
+    <section id="tab-notes">
+      <h2 class="section-title">Notes <span style="color:var(--muted);font-weight:400;font-size:13px;">live, shared with the team</span></h2>
+      <button class="new-note-btn" id="newNoteBtn">+ New note</button>
+      <div id="noteList"></div>
+    </section>
+
+    <section id="tab-cal">
+      <h2 class="section-title">Calendar</h2>
+      <div class="cal-head">
+        <button id="calPrev">‹</button>
+        <div class="month" id="calMonthLabel"></div>
+        <button id="calNext">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-list-title" id="calListTitle"></div>
+      <div id="calList"></div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-tab="todos" class="active">✓ Todos</button>
+    <button data-tab="notes">✎ Notes</button>
+    <button data-tab="cal">▦ Calendar</button>
+  </nav>
+</div>
+
+<div class="modal-back hidden" id="nameModal">
+  <div class="modal">
+    <h3>What's your name?</h3>
+    <p>Shown next to your edits so teammates know who wrote what.</p>
+    <input type="text" id="nameInput" placeholder="e.g. Sam">
+    <button id="nameSaveBtn">Continue</button>
+  </div>
+</div>
+
+<script>
+// ====== CONNECT YOUR SUPABASE PROJECT HERE ======
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+// =================================================
+
+const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT");
+if(!isConfigured) document.getElementById('setupWarning').classList.remove('hidden');
+const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+(function(){
+  let myName = localStorage.getItem('bcjr-name') || '';
+  let todos = [];
+  let notes = [];
+  let calDate = new Date();
+  let selectedDay = null;
+  const focusedFields = new Set(); // ids currently being typed in, so remote updates don't clobber
+
+  const $ = id => document.getElementById(id);
+  const pad = n => n<10?'0'+n:n;
+  const todayStr = () => new Date().toISOString().slice(0,10);
+
+  if(!myName){ $('nameModal').classList.remove('hidden'); }
+
+  $('whoBtn').addEventListener('click', ()=>{
+    $('nameInput').value = myName;
+    $('nameModal').classList.remove('hidden');
+  });
+  $('nameSaveBtn').addEventListener('click', ()=>{
+    const v = $('nameInput').value.trim();
+    if(!v) return;
+    myName = v;
+    localStorage.setItem('bcjr-name', v);
+    $('nameModal').classList.add('hidden');
+  });
+
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
+      btn.classList.add('active');
+      $('tab-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab==='cal') renderCalendar();
+    });
+  });
+
+  if(!isConfigured) return; // stop here; nothing to load without credentials
+
+  // ---------- Load + subscribe: Todos ----------
+  async function loadTodos(){
+    const { data, error } = await sb.from('todos').select('*').order('created_at', {ascending:false});
+    if(!error) todos = data || [];
+    renderTodos();
+  }
+  sb.channel('todos-live')
+    .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, loadTodos)
+    .subscribe();
+
+  $('addTodoBtn').addEventListener('click', async ()=>{
+    const text = $('todoText').value.trim();
+    if(!text) return;
+    const { error } = await sb.from('todos').insert({
+      text,
+      assignee: $('todoAssignee').value.trim() || null,
+      due: $('todoDue').value || null,
+      priority: $('todoPriority').value,
+      done: false
+    });
+    if(error) console.error(error);
+    $('todoText').value=''; $('todoAssignee').value=''; $('todoDue').value='';
+  });
+
+  function renderTodos(){
+    const list = $('todoList');
+    list.innerHTML = '';
+    const names = Array.from(new Set(todos.map(t=>t.assignee).filter(Boolean)));
+    $('assigneeList').innerHTML = names.map(n=>`<option value="${n}">`).join('');
+
+    if(todos.length===0){ list.innerHTML = '<div class="empty">No tasks yet. Add the first one above.</div>'; return; }
+    const today = todayStr();
+    const open = todos.filter(t=>!t.done).sort((a,b)=>{
+      if(a.due && b.due) return a.due.localeCompare(b.due);
+      if(a.due) return -1;
+      if(b.due) return 1;
+      return new Date(b.created_at)-new Date(a.created_at);
+    });
+    const done = todos.filter(t=>t.done).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const groups = { overdue:[], today:[], upcoming:[], none:[] };
+    open.forEach(t=>{
+      if(!t.due) groups.none.push(t);
+      else if(t.due < today) groups.overdue.push(t);
+      else if(t.due === today) groups.today.push(t);
+      else groups.upcoming.push(t);
+    });
+    const renderGroup = (label, arr) => {
+      if(arr.length===0) return;
+      const h = document.createElement('div'); h.className='group-label'; h.textContent=label;
+      list.appendChild(h);
+      arr.forEach(t=>list.appendChild(todoRow(t)));
+    };
+    renderGroup('Overdue', groups.overdue);
+    renderGroup('Today', groups.today);
+    renderGroup('Upcoming', groups.upcoming);
+    renderGroup('No due date', groups.none);
+    if(done.length){
+      const h = document.createElement('div'); h.className='group-label'; h.textContent='Done';
+      list.appendChild(h);
+      done.slice(0,10).forEach(t=>list.appendChild(todoRow(t)));
+    }
+  }
+
+  function todoRow(t){
+    const row = document.createElement('div');
+    row.className = 'todo' + (t.done?' done':'');
+    const today = todayStr();
+    let duePill = '';
+    if(t.due){
+      const cls = (!t.done && t.due < today) ? 'overdue' : 'due';
+      duePill = `<span class="pill ${cls}">${t.due===today?'Today':t.due}</span>`;
+    }
+    row.innerHTML = `
+      <button class="check"></button>
+      <div class="body">
+        <div class="text"></div>
+        <div class="meta">
+          <span class="pill">${t.assignee||'Unassigned'}</span>
+          ${t.priority==='high' ? '<span class="pill overdue">High</span>' : ''}
+          ${duePill}
+        </div>
+      </div>
+      <button class="del">×</button>`;
+    row.querySelector('.text').textContent = t.text;
+    row.querySelector('.check').addEventListener('click', async ()=>{
+      await sb.from('todos').update({ done: !t.done }).eq('id', t.id);
+    });
+    row.querySelector('.del').addEventListener('click', async ()=>{
+      await sb.from('todos').delete().eq('id', t.id);
+    });
+    return row;
+  }
+
+  // ---------- Load + subscribe: Notes (live editing) ----------
+  async function loadNotes(){
+    const { data, error } = await sb.from('notes').select('*').order('updated_at', {ascending:false});
+    if(!error) notes = data || [];
+    renderNotes();
+  }
+  sb.channel('notes-live')
+    .on('postgres_changes', { event:'*', schema:'public', table:'notes' }, payload=>{
+      // merge instead of full re-render so we don't clobber a field someone's actively typing in
+      loadNotes();
+    })
+    .subscribe();
+
+  $('newNoteBtn').addEventListener('click', async ()=>{
+    await sb.from('notes').insert({ title:'', body:'', updated_by: myName });
+  });
+
+  function renderNotes(){
+    const list = $('noteList');
+    list.innerHTML = '';
+    if(notes.length===0){ list.innerHTML = '<div class="empty">No notes yet.</div>'; return; }
+    notes.forEach(n=>{
+      const titleFocusId = 'title-'+n.id, bodyFocusId = 'body-'+n.id;
+      const card = document.createElement('div');
+      card.className = 'note';
+      const d = new Date(n.updated_at);
+      card.innerHTML = `
+        <input class="note-title" placeholder="Untitled" />
+        <textarea class="note-body" placeholder="Write something…" rows="3"></textarea>
+        <div class="note-foot">
+          <span class="ts"><span class="live-dot" id="dot-${n.id}"></span>${n.updated_by?n.updated_by+' · ':''}${d.toLocaleDateString()} ${pad(d.getHours())}:${pad(d.getMinutes())}</span>
+          <button class="del">Delete</button>
+        </div>`;
+      const titleEl = card.querySelector('.note-title');
+      const bodyEl = card.querySelector('.note-body');
+      // don't overwrite what THIS user is actively typing
+      if(!focusedFields.has(titleFocusId)) titleEl.value = n.title;
+      if(!focusedFields.has(bodyFocusId)) bodyEl.value = n.body;
+
+      let saveTimer;
+      const debSave = () => {
+        clearTimeout(saveTimer);
+        const dot = $('dot-'+n.id); if(dot) dot.classList.add('on');
+        saveTimer = setTimeout(async ()=>{
+          await sb.from('notes').update({
+            title: titleEl.value, body: bodyEl.value,
+            updated_by: myName, updated_at: new Date().toISOString()
+          }).eq('id', n.id);
+          if(dot) dot.classList.remove('on');
+        }, 600);
+      };
+      titleEl.addEventListener('focus', ()=>focusedFields.add(titleFocusId));
+      titleEl.addEventListener('blur', ()=>focusedFields.delete(titleFocusId));
+      bodyEl.addEventListener('focus', ()=>focusedFields.add(bodyFocusId));
+      bodyEl.addEventListener('blur', ()=>focusedFields.delete(bodyFocusId));
+      titleEl.addEventListener('input', debSave);
+      bodyEl.addEventListener('input', debSave);
+      card.querySelector('.del').addEventListener('click', async ()=>{
+        await sb.from('notes').delete().eq('id', n.id);
+      });
+      list.appendChild(card);
+    });
+  }
+
+  // ---------- Calendar ----------
+  function renderCalendar(){
+    const y = calDate.getFullYear(), m = calDate.getMonth();
+    $('calMonthLabel').textContent = calDate.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+    const grid = $('calGrid');
+    grid.innerHTML = '';
+    ['S','M','T','W','T','F','S'].forEach(d=>{
+      const el = document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el);
+    });
+    const firstDow = new Date(y,m,1).getDay();
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const today = todayStr();
+    const dueDates = new Set(todos.filter(t=>t.due && !t.done).map(t=>t.due));
+    for(let i=0;i<firstDow;i++){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); }
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${pad(m+1)}-${pad(d)}`;
+      const el = document.createElement('div');
+      el.className = 'cal-day' + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
+      el.innerHTML = `<span>${d}</span>` + (dueDates.has(dateStr) ? '<span class="dot"></span>' : '');
+      el.addEventListener('click', ()=>{ selectedDay = dateStr; renderCalendar(); });
+      grid.appendChild(el);
+    }
+    if(!selectedDay) selectedDay = today;
+    renderCalList();
+  }
+
+  function renderCalList(){
+    const title = $('calListTitle');
+    const list = $('calList');
+    list.innerHTML = '';
+    const dayTodos = todos.filter(t=>t.due===selectedDay);
+    const label = selectedDay===todayStr() ? 'Today' : new Date(selectedDay+'T00:00:00').toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
+    title.textContent = `${label} · ${dayTodos.length} task${dayTodos.length===1?'':'s'}`;
+    if(dayTodos.length===0){ list.innerHTML = '<div class="empty">Nothing due this day.</div>'; return; }
+    dayTodos.forEach(t=>{
+      const row = document.createElement('div');
+      row.className='cal-todo';
+      row.innerHTML = `<div><div class="txt"></div><div class="who">${t.assignee||'Unassigned'}</div></div><button class="cal-add">Add to calendar</button>`;
+      row.querySelector('.txt').textContent = t.text;
+      row.querySelector('.cal-add').addEventListener('click', ()=>downloadICS(t));
+      list.appendChild(row);
+    });
+  }
+
+  function downloadICS(t){
+    const dateDigits = t.due.replace(/-/g,'');
+    const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Basecamp Jr//EN','BEGIN:VEVENT',
+      `UID:${t.id}@basecampjr`,`DTSTAMP:${dateDigits}T090000Z`,`DTSTART;VALUE=DATE:${dateDigits}`,
+      `SUMMARY:${(t.text||'Task').replace(/\n/g,' ')}`,`DESCRIPTION:Assigned to ${t.assignee||'Unassigned'}`,
+      'END:VEVENT','END:VCALENDAR'].join('\r\n');
+    const blob = new Blob([ics], {type:'text/calendar'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (t.text||'task').slice(0,30).replace(/[^a-z0-9]/gi,'_') + '.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  $('calPrev').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); });
+  $('calNext').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); });
+
+  loadTodos();
+  loadNotes();
+  renderCalendar();
+})();
+</script>
+</body>
+</html>
