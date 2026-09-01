@@ -173,8 +173,8 @@
 <script>
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 // Use the PUBLISHABLE key (starts with sb_publishable_...), never the secret key.
-const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MfDYPsXWX9tPFguJDRcTIw_9o3rd47A";
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "YOUR-PUBLISHABLE-KEY";
 // =================================================
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT");
@@ -247,7 +247,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const email = $('authEmail').value.trim();
     if(!email) return;
     $('authStatus').textContent = 'Sending…';
-    const { error } = await sb.auth.signInWithOtp({ email, options:{ shouldCreateUser:false } });
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: window.location.origin + window.location.pathname
+      }
+    });
     $('authStatus').textContent = error ? error.message : 'Check your email for the link.';
   });
 
