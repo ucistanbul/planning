@@ -367,7 +367,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-02.1";
+const APP_VERSION = "2026-09-02.2-debug";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -706,11 +706,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function scanMarkerIds(){
     return new Set(Array.from(pageBodyEl.querySelectorAll('.task-marker')).map(s=>s.dataset.taskId).filter(Boolean));
   }
-  function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
+  function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); console.log('[DEBUG] baseline established:', [...knownMarkerIds]); }
   function syncMarkerDeletions(){
     const current = scanMarkerIds();
+    console.log('[DEBUG] syncMarkerDeletions: knownMarkerIds=', [...knownMarkerIds], 'current=', [...current]);
     knownMarkerIds.forEach(id=>{
-      if(!current.has(id)) sb.from('todos').delete().eq('id', id);
+      if(!current.has(id)){
+        console.log('[DEBUG] marker id missing from current scan, deleting task:', id);
+        sb.from('todos').delete().eq('id', id).then(({error})=>{
+          console.log('[DEBUG] delete() result for', id, 'error=', error);
+        });
+      }
     });
     knownMarkerIds = current;
   }
