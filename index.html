@@ -758,6 +758,18 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         recentlyCreatedMarkerIds.set(taskId, Date.now());
         const markerHtml = `&nbsp;<span class="task-marker" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
         document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
+        // execCommand leaves the cursor after ALL inserted content (including the
+        // trailing padding space), not right after the marker — which meant the
+        // very next Backspace deleted that space instead of the marker. Fix the
+        // cursor position explicitly.
+        const insertedMarker = pageBodyEl.querySelector(`.task-marker[data-task-id="${taskId}"]`);
+        if(insertedMarker){
+          const r = document.createRange();
+          r.setStartAfter(insertedMarker);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
         savePage();
         renderPageTasksList();
         sb.from('todos').insert({
