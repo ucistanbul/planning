@@ -67,10 +67,11 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);}
-  .task-chip{display:inline-flex;align-items:center;gap:5px;background:var(--task-soft);color:var(--task);border-radius:20px;padding:2px 6px 2px 6px;font-size:13px;cursor:pointer;user-select:none;margin:0 2px;}
+  .task-chip{display:flex;align-items:center;gap:8px;background:var(--task-soft);color:var(--task);border-radius:8px;padding:8px 10px;font-size:13px;cursor:default;user-select:none;margin:8px 0;}
   .task-chip.done{opacity:0.55;text-decoration:line-through;}
-  .task-chip .chip-check{font-size:13px;}
-  .task-chip .chip-del{opacity:0.6;padding:0 2px;font-weight:600;}
+  .task-chip .chip-check{font-size:15px;cursor:pointer;flex-shrink:0;}
+  .task-chip .chip-text{flex:1;}
+  .task-chip .chip-del{opacity:0.6;padding:0 4px;font-weight:600;cursor:pointer;flex-shrink:0;}
   .task-chip .chip-del:hover{opacity:1;color:var(--danger);}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
@@ -597,66 +598,32 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
     if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
-    if(e.key === 'Backspace' || e.key === 'Delete'){
-      const chip = findAdjacentChip(e.key === 'Backspace' ? 'back' : 'forward');
-      if(chip){
-        e.preventDefault();
-        const taskId = chip.dataset.taskId;
-        chip.remove();
-        savePage();
-        sb.from('todos').delete().eq('id', taskId);
-      }
-    }
   });
-
-  function isWhitespaceNode(n){ return !!n && n.nodeType===3 && /^[\s\u00A0]*$/.test(n.textContent); }
-  function findAdjacentChip(direction){
-    const sel = window.getSelection();
-    if(!sel.rangeCount || !sel.isCollapsed) return null;
-    const range = sel.getRangeAt(0);
-    const container = range.startContainer, offset = range.startOffset;
-
-    // Cursor sitting anywhere inside a whitespace-only run (e.g. the padding space
-    // around a chip) counts as being at that boundary, regardless of exact offset.
-    if(container.nodeType === 3 && isWhitespaceNode(container)){
-      let sib = direction==='back' ? container.previousSibling : container.nextSibling;
-      while(isWhitespaceNode(sib)) sib = direction==='back' ? sib.previousSibling : sib.nextSibling;
-      if(sib && sib.nodeType===1 && sib.classList && sib.classList.contains('task-chip')) return sib;
-      return null;
-    }
-    if(container.nodeType === 1){
-      let candidate = container.childNodes[direction==='back' ? offset-1 : offset];
-      while(isWhitespaceNode(candidate)) candidate = direction==='back' ? candidate.previousSibling : candidate.nextSibling;
-      if(candidate && candidate.nodeType===1 && candidate.classList && candidate.classList.contains('task-chip')) return candidate;
-      return null;
-    }
-    if(container.nodeType === 3){
-      const atBoundary = direction==='back' ? offset===0 : offset===container.textContent.length;
-      if(atBoundary){
-        let sib = direction==='back' ? container.previousSibling : container.nextSibling;
-        while(isWhitespaceNode(sib)) sib = direction==='back' ? sib.previousSibling : sib.nextSibling;
-        if(sib && sib.nodeType===1 && sib.classList && sib.classList.contains('task-chip')) return sib;
-      }
-    }
-    return null;
-  }
   // Authoritative catch-all: whenever a chip leaves the DOM by ANY means
   // (native browser backspace handling, our own code, cut, etc.), delete
   // its task. This doesn't rely on correctly predicting which code path
   // removed it — it just reacts to the fact that it's gone.
   const chipObserver = new MutationObserver(mutations=>{
+    const removedTaskIds = new Set();
     mutations.forEach(m=>{
       m.removedNodes.forEach(node=>{
         if(node.nodeType !== 1) return;
         const chips = node.classList && node.classList.contains('task-chip')
           ? [node]
           : (node.querySelectorAll ? Array.from(node.querySelectorAll('.task-chip')) : []);
-        chips.forEach(chip=>{
-          const taskId = chip.dataset.taskId;
-          if(taskId) sb.from('todos').delete().eq('id', taskId);
-        });
+        chips.forEach(chip=>{ if(chip.dataset.taskId) removedTaskIds.add(chip.dataset.taskId); });
       });
     });
+    if(removedTaskIds.size === 0) return;
+    // Defer: a wholesale re-render (innerHTML reassignment) removes old chip nodes
+    // and immediately adds new identical ones. Only treat it as a real deletion if
+    // the task-id is genuinely absent once the DOM has settled.
+    setTimeout(()=>{
+      removedTaskIds.forEach(taskId=>{
+        const stillPresent = pageBodyEl.querySelector(`.task-chip[data-task-id="${taskId}"]`);
+        if(!stillPresent) sb.from('todos').delete().eq('id', taskId);
+      });
+    }, 0);
   });
   chipObserver.observe(pageBodyEl, { childList:true, subtree:true });
 
@@ -719,7 +686,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        const chipHtml = `&nbsp;<span class="task-chip" contenteditable="false" unselectable="on" data-task-id="${taskId}"><span class="chip-check">☐</span><span class="chip-text">${escapeHtml(text.trim())}</span><span class="chip-del" title="Remove task">×</span></span>&nbsp;`;
+        const chipHtml = `<div class="task-chip" contenteditable="false" unselectable="on" data-task-id="${taskId}"><span class="chip-check">☐</span><span class="chip-text">${escapeHtml(text.trim())}</span><span class="chip-del" title="Remove task">×</span></div><div><br></div>`;
         document.execCommand('insertHTML', false, chipHtml); // synchronous — happens immediately, replacing the restored selection
         savePage();
         renderPageTasksList();
