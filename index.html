@@ -651,6 +651,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const marker = e.target.closest('.task-marker');
     if(marker && marker.dataset.taskId){
       flashAndScroll('side-todo-'+marker.dataset.taskId);
+      // A click on a single inline character can leave the browser's cursor on
+      // either side of it depending on exact click position — which made a
+      // follow-up Backspace unpredictably delete neighboring content instead of
+      // the marker. Force it to a known position right after the marker.
+      const range = document.createRange();
+      range.setStartAfter(marker);
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   });
   pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
