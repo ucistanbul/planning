@@ -778,7 +778,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        const markerHtml = `&nbsp;<span class="task-marker" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
+        const markerHtml = `&nbsp;<span class="task-marker" contenteditable="false" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
         document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
         // execCommand leaves the cursor after ALL inserted content (including the
         // trailing padding space), not right after the marker — which meant the
