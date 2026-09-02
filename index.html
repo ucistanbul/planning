@@ -16,7 +16,7 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
-  .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:76px;}
+  .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:112px;}
   header{padding:20px 16px 12px;display:flex;align-items:baseline;justify-content:space-between;}
   header .brand{font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
   header .who{font-size:12px;color:var(--muted);background:none;border:none;font-family:inherit;cursor:pointer;padding:4px;}
@@ -124,9 +124,13 @@
   .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
   .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:11px;border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;}
 
-  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:560px;margin:0 auto;display:flex;}
-  nav.tabs button{flex:1;border:none;background:none;padding:10px 0 9px;font-family:inherit;font-size:10px;color:var(--muted);cursor:pointer;}
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:560px;margin:0 auto;display:flex;padding:6px 0;}
+  nav.tabs button{flex:1;border:none;background:none;padding:10px 0;font-family:inherit;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  nav.tabs .tab-icon{font-size:22px;line-height:1;}
+  nav.tabs .tab-label{font-size:11px;font-weight:500;}
   nav.tabs button.active{color:var(--accent);}
+  .flash-highlight{animation:flashbg 1.6s ease;}
+  @keyframes flashbg{0%{background:var(--gold-soft);}100%{background:var(--surface);}}
 
   .modal-back{position:fixed;inset:0;background:rgba(30,25,15,0.4);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px;}
   .modal{background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:340px;}
@@ -235,11 +239,11 @@
   </main>
 
   <nav class="tabs">
-    <button data-tab="latest" class="active">⚡ Latest</button>
-    <button data-tab="topics">☰ Topics</button>
-    <button data-tab="todos">✓ Todos</button>
-    <button data-tab="notes">✎ Notes</button>
-    <button data-tab="sched">▦ Schedule</button>
+    <button data-tab="latest" class="active"><span class="tab-icon">⚡</span><span class="tab-label">Latest</span></button>
+    <button data-tab="topics"><span class="tab-icon">☰</span><span class="tab-label">Topics</span></button>
+    <button data-tab="todos"><span class="tab-icon">✓</span><span class="tab-label">Todos</span></button>
+    <button data-tab="notes"><span class="tab-icon">✎</span><span class="tab-label">Notes</span></button>
+    <button data-tab="sched"><span class="tab-icon">▦</span><span class="tab-label">Schedule</span></button>
   </nav>
 </div>
 
@@ -271,6 +275,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   let topics = [];
   let messages = [];
   let notes = [];
+  const noteCardEls = new Map(); // note id -> persistent DOM element, never destroyed while it still exists
   let selectedTopicId = null;
   let noteMode = {}; // id -> 'edit' | 'preview'
   let calDate = new Date();
@@ -310,15 +315,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('nameModal').classList.add('hidden');
   });
 
+  function activateTab(name){
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+    document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
+    $('tab-'+name).classList.add('active');
+    if(name==='sched'){ renderGantt(); renderCalendar(); }
+  }
   document.querySelectorAll('nav.tabs button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
-      btn.classList.add('active');
-      $('tab-'+btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab==='sched'){ renderGantt(); renderCalendar(); }
-    });
+    btn.addEventListener('click', ()=>activateTab(btn.dataset.tab));
   });
+
+  function flashAndScroll(elId){
+    setTimeout(()=>{
+      const el = document.getElementById(elId);
+      if(!el) return;
+      el.scrollIntoView({behavior:'smooth', block:'center'});
+      el.classList.add('flash-highlight');
+      setTimeout(()=>el.classList.remove('flash-highlight'), 1600);
+    }, 60);
+  }
 
   if(!isConfigured) return;
 
@@ -386,17 +401,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function renderLatest(){
     const items = [];
     todos.forEach(t=>{
-      items.push({ ts:t.created_at, icon:'✓', txt:`${t.done?'Completed':'Added'}: "${t.text}"`, who:t.assignee||'' });
+      items.push({ ts:t.created_at, icon:'✓', txt:`${t.done?'Completed':'Added'}: "${t.text}"`, who:t.assignee||'', go:()=>{ activateTab('todos'); flashAndScroll('todo-'+t.id); } });
     });
     topics.forEach(t=>{
-      items.push({ ts:t.created_at, icon:'☰', txt:`New topic: "${t.title}"`, who:t.created_by||'' });
+      items.push({ ts:t.created_at, icon:'☰', txt:`New topic: "${t.title}"`, who:t.created_by||'', go:()=>{ activateTab('topics'); openTopic(t.id); } });
     });
     messages.forEach(m=>{
       const topic = topics.find(t=>t.id===m.topic_id);
-      items.push({ ts:m.created_at, icon:'💬', txt:`Replied in "${topic?topic.title:'a topic'}"`, who:m.created_by||'' });
+      items.push({ ts:m.created_at, icon:'💬', txt:`Replied in "${topic?topic.title:'a topic'}"`, who:m.created_by||'', go:()=>{ activateTab('topics'); if(topic) openTopic(topic.id); } });
     });
     notes.forEach(n=>{
-      items.push({ ts:n.updated_at, icon:'✎', txt:`Updated note "${n.title||'Untitled'}"`, who:n.updated_by||'' });
+      items.push({ ts:n.updated_at, icon:'✎', txt:`Updated note "${n.title||'Untitled'}"`, who:n.updated_by||'', go:()=>{ activateTab('notes'); flashAndScroll('note-'+n.id); } });
     });
     items.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
     const list = $('latestList');
@@ -405,8 +420,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     items.slice(0,40).forEach(it=>{
       const row = document.createElement('div');
       row.className = 'feed-item';
+      row.style.cursor = 'pointer';
       row.innerHTML = `<div class="feed-icon">${it.icon}</div><div class="feed-body"><div class="txt"></div><div class="meta">${it.who?it.who+' · ':''}${timeAgo(it.ts)}</div></div>`;
       row.querySelector('.txt').textContent = it.txt;
+      row.addEventListener('click', it.go);
       list.appendChild(row);
     });
   }
@@ -572,6 +589,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   function todoRow(t){
     const row = document.createElement('div');
+    row.id = 'todo-'+t.id;
     row.className = 'todo' + (t.done?' done':'');
     const today = todayStr();
     let datePill = '';
@@ -589,6 +607,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           ${t.assignee?`<span class="pill">${t.assignee}</span>`:''}
           ${t.priority==='high' ? '<span class="pill overdue">High</span>' : ''}
           ${datePill}
+          <span class="pill">added ${timeAgo(t.created_at)}</span>
         </div>
       </div>
       <button class="del">×</button>`;
@@ -604,7 +623,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   // ================= NOTES =================
   async function loadNotes(){
-    const { data } = await sb.from('notes').select('*').order('updated_at', {ascending:false});
+    const { data } = await sb.from('notes').select('*').order('created_at', {ascending:false});
     notes = data || [];
   }
   $('newNoteBtn').addEventListener('click', async ()=>{
@@ -612,60 +631,100 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   });
 
   function renderNotes(){
-    const list = $('noteList');
-    list.innerHTML = '';
-    if(notes.length===0){ list.innerHTML = '<div class="empty">No notes yet.</div>'; return; }
+    const container = $('noteList');
+    if(notes.length===0){
+      noteCardEls.forEach(el=>el.remove());
+      noteCardEls.clear();
+      container.innerHTML = '<div class="empty">No notes yet.</div>';
+      return;
+    }
+    if(container.querySelector('.empty')) container.innerHTML = '';
+    const currentIds = new Set(notes.map(n=>n.id));
+    for(const [id, el] of noteCardEls){
+      if(!currentIds.has(id)){ el.remove(); noteCardEls.delete(id); }
+    }
     notes.forEach(n=>{
-      const mode = noteMode[n.id] || 'edit';
-      const titleFocusId = 'title-'+n.id, bodyFocusId = 'body-'+n.id;
-      const card = document.createElement('div');
-      card.className = 'note';
-      const d = new Date(n.updated_at);
-      card.innerHTML = `
-        <input class="note-title" placeholder="Untitled" />
-        <textarea class="note-body ${mode==='preview'?'hidden':''}" placeholder="Write in markdown…" rows="4"></textarea>
-        <div class="note-preview ${mode==='preview'?'':'hidden'}"></div>
-        <div class="note-foot">
-          <span class="ts"><span class="live-dot" id="dot-${n.id}"></span>${n.updated_by?n.updated_by+' · ':''}${d.toLocaleDateString()} ${pad(d.getHours())}:${pad(d.getMinutes())}</span>
-          <div class="note-actions">
-            <button class="btn-ghost toggle-mode">${mode==='preview'?'Edit':'Preview'}</button>
-            <button class="btn-ghost del">Delete</button>
-          </div>
-        </div>`;
-      const titleEl = card.querySelector('.note-title');
-      const bodyEl = card.querySelector('.note-body');
-      const previewEl = card.querySelector('.note-preview');
-      if(!focusedFields.has(titleFocusId)) titleEl.value = n.title;
-      if(!focusedFields.has(bodyFocusId)) bodyEl.value = n.body;
-      try{ previewEl.innerHTML = window.marked ? marked.parse(n.body||'') : (n.body||''); }catch(e){ previewEl.textContent = n.body||''; }
-
-      let saveTimer;
-      const debSave = () => {
-        clearTimeout(saveTimer);
-        const dot = $('dot-'+n.id); if(dot) dot.classList.add('on');
-        saveTimer = setTimeout(async ()=>{
-          await sb.from('notes').update({
-            title: titleEl.value, body: bodyEl.value,
-            updated_by: myName, updated_at: new Date().toISOString()
-          }).eq('id', n.id);
-          if(dot) dot.classList.remove('on');
-        }, 600);
-      };
-      titleEl.addEventListener('focus', ()=>focusedFields.add(titleFocusId));
-      titleEl.addEventListener('blur', ()=>focusedFields.delete(titleFocusId));
-      bodyEl.addEventListener('focus', ()=>focusedFields.add(bodyFocusId));
-      bodyEl.addEventListener('blur', ()=>focusedFields.delete(bodyFocusId));
-      titleEl.addEventListener('input', debSave);
-      bodyEl.addEventListener('input', debSave);
-      card.querySelector('.toggle-mode').addEventListener('click', ()=>{
-        noteMode[n.id] = mode==='preview' ? 'edit' : 'preview';
-        renderNotes();
-      });
-      card.querySelector('.del').addEventListener('click', async ()=>{
-        await sb.from('notes').delete().eq('id', n.id);
-      });
-      list.appendChild(card);
+      let card = noteCardEls.get(n.id);
+      if(!card){
+        card = buildNoteCard(n);
+        noteCardEls.set(n.id, card);
+      } else {
+        updateNoteCard(card, n);
+      }
+      container.appendChild(card); // re-appending an already-mounted node just moves it; focus/cursor survive
     });
+  }
+
+  function buildNoteCard(n){
+    const mode = noteMode[n.id] || 'edit';
+    const card = document.createElement('div');
+    card.className = 'note';
+    card.id = 'note-' + n.id;
+    card.innerHTML = `
+      <input class="note-title" placeholder="Untitled" />
+      <textarea class="note-body" placeholder="Write in markdown…" rows="4"></textarea>
+      <div class="note-preview hidden"></div>
+      <div class="note-foot">
+        <span class="ts"><span class="live-dot"></span><span class="ts-text"></span></span>
+        <div class="note-actions">
+          <button class="btn-ghost toggle-mode"></button>
+          <button class="btn-ghost del">Delete</button>
+        </div>
+      </div>`;
+    const titleEl = card.querySelector('.note-title');
+    const bodyEl = card.querySelector('.note-body');
+    const titleFocusId = 'title-'+n.id, bodyFocusId = 'body-'+n.id;
+
+    let saveTimer;
+    const debSave = () => {
+      clearTimeout(saveTimer);
+      card.querySelector('.live-dot').classList.add('on');
+      saveTimer = setTimeout(async ()=>{
+        await sb.from('notes').update({
+          title: titleEl.value, body: bodyEl.value,
+          updated_by: myName, updated_at: new Date().toISOString()
+        }).eq('id', n.id);
+        card.querySelector('.live-dot').classList.remove('on');
+      }, 600);
+    };
+    titleEl.addEventListener('focus', ()=>focusedFields.add(titleFocusId));
+    titleEl.addEventListener('blur', ()=>focusedFields.delete(titleFocusId));
+    bodyEl.addEventListener('focus', ()=>focusedFields.add(bodyFocusId));
+    bodyEl.addEventListener('blur', ()=>focusedFields.delete(bodyFocusId));
+    titleEl.addEventListener('input', debSave);
+    bodyEl.addEventListener('input', debSave);
+    card.querySelector('.toggle-mode').addEventListener('click', ()=>{
+      noteMode[n.id] = (noteMode[n.id]||'edit')==='preview' ? 'edit' : 'preview';
+      updateNoteCard(card, notes.find(x=>x.id===n.id) || n);
+    });
+    card.querySelector('.del').addEventListener('click', async ()=>{
+      await sb.from('notes').delete().eq('id', n.id);
+    });
+
+    updateNoteCard(card, n);
+    return card;
+  }
+
+  function updateNoteCard(card, n){
+    const mode = noteMode[n.id] || 'edit';
+    const titleFocusId = 'title-'+n.id, bodyFocusId = 'body-'+n.id;
+    const titleEl = card.querySelector('.note-title');
+    const bodyEl = card.querySelector('.note-body');
+    const previewEl = card.querySelector('.note-preview');
+
+    if(!focusedFields.has(titleFocusId) && titleEl.value !== n.title) titleEl.value = n.title;
+    if(!focusedFields.has(bodyFocusId) && bodyEl.value !== n.body) bodyEl.value = n.body;
+
+    bodyEl.classList.toggle('hidden', mode==='preview');
+    previewEl.classList.toggle('hidden', mode!=='preview');
+    if(mode==='preview'){
+      try{ previewEl.innerHTML = window.marked ? marked.parse(n.body||'') : (n.body||''); }
+      catch(e){ previewEl.textContent = n.body||''; }
+    }
+    card.querySelector('.toggle-mode').textContent = mode==='preview' ? 'Edit' : 'Preview';
+
+    const d = new Date(n.updated_at);
+    card.querySelector('.ts-text').textContent = `${n.updated_by?n.updated_by+' · ':''}${d.toLocaleDateString()} ${pad(d.getHours())}:${pad(d.getMinutes())} (${timeAgo(n.updated_at)})`;
   }
 
   // ================= SCHEDULE: GANTT =================
