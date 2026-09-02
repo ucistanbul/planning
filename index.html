@@ -67,6 +67,8 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
+  .task-marker{cursor:pointer;padding:0 1px;border-radius:3px;}
+  .task-marker:hover{background:var(--task-soft);}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
@@ -466,7 +468,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderAll();
     sb.channel('db-live')
       .on('postgres_changes', { event:'*', schema:'public', table:'todo_lists' }, async ()=>{ await loadTodoLists(); renderTodos(); })
-      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); refreshTaskMarkers(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'pages' }, async ()=>{ await loadPages(); renderPagesList(); renderLatest(); if(selectedPageId && !pageBodyFocused) syncPageDetailFromData(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'page_comments' }, async ()=>{ await loadPageComments(); renderPageCommentsPane(); renderLatest(); renderNotifBadge(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'task_comments' }, async ()=>{ await loadTaskComments(); renderTodos(); renderLatest(); renderNotifBadge(); renderPageTasksList(); })
@@ -599,6 +601,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderPageTasksList();
     renderPageCommentsPane();
     renderPageHistory();
+    refreshTaskMarkers();
   }
   $('pageBackBtn').addEventListener('click', ()=>{
     selectedPageId = null;
@@ -638,6 +641,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(link && (e.metaKey || e.ctrlKey)){
       e.preventDefault();
       window.open(link.href, '_blank', 'noopener');
+      return;
+    }
+    const marker = e.target.closest('.task-marker');
+    if(marker && marker.dataset.taskId){
+      flashAndScroll('side-todo-'+marker.dataset.taskId);
     }
   });
   pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
@@ -651,6 +659,50 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
+
+  const markerObserver = new MutationObserver(mutations=>{
+    const idsToCheck = new Set();
+    mutations.forEach(m=>{
+      m.removedNodes.forEach(node=>{
+        if(node.nodeType !== 1) return;
+        if(node.classList && node.classList.contains('task-marker') && node.dataset.taskId) idsToCheck.add(node.dataset.taskId);
+        if(node.querySelectorAll){
+          node.querySelectorAll('.task-marker').forEach(el=>{ if(el.dataset.taskId) idsToCheck.add(el.dataset.taskId); });
+        }
+      });
+    });
+    // Also catch the case where just the character inside a marker got deleted,
+    // leaving an empty (but still present) span.
+    pageBodyEl.querySelectorAll('.task-marker').forEach(span=>{
+      if(span.textContent.trim() === ''){
+        if(span.dataset.taskId) idsToCheck.add(span.dataset.taskId);
+        span.remove();
+      }
+    });
+    if(idsToCheck.size === 0) return;
+    // Defer: a routine re-render can remove-then-immediately-re-add an identical
+    // marker. Only treat it as a real deletion if it's genuinely gone afterward.
+    setTimeout(()=>{
+      idsToCheck.forEach(taskId=>{
+        const stillThere = pageBodyEl.querySelector(`.task-marker[data-task-id="${taskId}"]`);
+        const stillHasChar = stillThere && stillThere.textContent.trim() !== '';
+        if(!stillHasChar) sb.from('todos').delete().eq('id', taskId);
+      });
+      savePage();
+    }, 0);
+  });
+  markerObserver.observe(pageBodyEl, { childList:true, subtree:true, characterData:true });
+
+  function refreshTaskMarkers(){
+    if(!selectedPageId) return;
+    pageBodyEl.querySelectorAll('.task-marker').forEach(span=>{
+      const t = todos.find(x=>x.id===span.dataset.taskId);
+      if(!t) return; // don't touch — may just not be loaded locally yet; deletion is handled above
+      const wantChar = t.done ? '✅' : '🔹';
+      if(span.textContent !== wantChar) span.textContent = wantChar;
+      span.title = t.text + (t.done ? ' (done)' : '') + ' — click to view in Tasks';
+    });
+  }
 
   function autoFormatList(bodyEl){
     const sel = window.getSelection();
@@ -690,20 +742,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         const text = prompt('Task text', defaultText);
         toolbarPromptOpen = false;
         if(!text || !text.trim()) return;
-        // If text was selected, remove it from the note — it's being "promoted" to a
-        // real task, which lives in the sidebar, not as a special node inside the text.
-        if(savedRange){
-          pageBodyEl.focus();
-          sel.removeAllRanges();
-          sel.addRange(savedRange);
-          document.execCommand('delete');
-          savePage();
-        }
+        pageBodyEl.focus();
+        if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
+        const taskId = crypto.randomUUID();
+        const markerHtml = `&nbsp;<span class="task-marker" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
+        document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
+        savePage();
+        renderPageTasksList();
         sb.from('todos').insert({
-          project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal'
+          id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal'
         }).then(({error})=>{
           if(error) console.error('task insert failed', error);
-          renderPageTasksList();
         });
       } else {
         document.execCommand(cmd, false, null);
