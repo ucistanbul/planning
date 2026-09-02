@@ -593,6 +593,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       box.appendChild(row);
     });
   }
+  let markerCheckInterval = null;
   function openPage(id){
     selectedPageId = id;
     $('pagesListView').classList.add('hidden');
@@ -602,11 +603,14 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderPageCommentsPane();
     renderPageHistory();
     refreshTaskMarkers();
+    if(markerCheckInterval) clearInterval(markerCheckInterval);
+    markerCheckInterval = setInterval(syncMarkerDeletions, 1500);
   }
   $('pageBackBtn').addEventListener('click', ()=>{
     selectedPageId = null;
     $('pageDetailView').classList.add('hidden');
     $('pagesListView').classList.remove('hidden');
+    if(markerCheckInterval){ clearInterval(markerCheckInterval); markerCheckInterval = null; }
   });
 
   function syncPageDetailFromData(){
@@ -652,6 +656,9 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
   pageBodyEl.addEventListener('blur', ()=>{ pageBodyFocused = false; });
   pageBodyEl.addEventListener('input', ()=>{ autoFormatList(pageBodyEl); savePage(); syncMarkerDeletions(); });
+  pageBodyEl.addEventListener('keyup', e=>{
+    if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
+  });
   pageBodyEl.addEventListener('keydown', e=>{
     const mod = e.metaKey || e.ctrlKey;
     if(mod && e.key.toLowerCase()==='b'){ e.preventDefault(); document.execCommand('bold'); savePage(); return; }
@@ -676,15 +683,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     });
     knownMarkerIds = current;
   }
+  const recentlyCreatedMarkerIds = new Map(); // taskId -> created-at ms, avoids racing our own not-yet-propagated insert
   function refreshTaskMarkers(){
     if(!selectedPageId) return;
+    let removedAny = false;
     pageBodyEl.querySelectorAll('.task-marker').forEach(span=>{
-      const t = todos.find(x=>x.id===span.dataset.taskId);
-      if(!t) return; // don't touch — may just not be loaded locally yet; deletion is handled above
+      const taskId = span.dataset.taskId;
+      const t = todos.find(x=>x.id===taskId);
+      if(!t){
+        const createdAt = recentlyCreatedMarkerIds.get(taskId);
+        if(createdAt && Date.now() - createdAt < 8000) return; // still within grace period, may just not have loaded locally yet
+        span.remove();
+        removedAny = true;
+        return;
+      }
       const wantChar = t.done ? '✅' : '🔹';
       if(span.textContent !== wantChar) span.textContent = wantChar;
       span.title = t.text + (t.done ? ' (done)' : '') + ' — click to view in Tasks';
     });
+    if(removedAny){ savePage(); establishMarkerBaseline(); }
   }
 
   function autoFormatList(bodyEl){
@@ -728,6 +745,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
+        recentlyCreatedMarkerIds.set(taskId, Date.now());
         const markerHtml = `&nbsp;<span class="task-marker" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
         document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
         savePage();
