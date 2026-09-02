@@ -543,7 +543,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   $('newPageBtn').addEventListener('click', async ()=>{
     const { data } = await sb.from('pages').insert({ project_id: projectId, title:'', body:'', created_by:myName, updated_by:myName }).select();
-    if(data && data[0]) openPage(data[0].id);
+    if(data && data[0]){
+      // Seed the local cache immediately — without this, openPage's lookup finds
+      // nothing (the realtime echo hasn't arrived yet) and bails out, silently
+      // resetting selectedPageId back to null right after creating the page.
+      pages.unshift(data[0]);
+      openPage(data[0].id);
+    }
   });
 
   function renderPagesList(){
@@ -634,6 +640,18 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       logPageEdit(selectedPageId);
     }, 600);
   }
+  async function savePageImmediate(){
+    // Cancels any pending debounced save and writes right now. Used whenever we
+    // programmatically remove a marker — without this, an already-in-flight
+    // stale save (queued moments earlier, before the removal) can land after
+    // the removal and its realtime echo will silently restore the old content.
+    clearTimeout(pageSaveTimer);
+    await sb.from('pages').update({
+      title: $('pageTitleInput').value,
+      body: $('pageBody').innerHTML,
+      updated_by: myName, updated_at: new Date().toISOString()
+    }).eq('id', selectedPageId);
+  }
   $('pageTitleInput').addEventListener('input', savePage);
   const pageBodyEl = $('pageBody');
   pageBodyEl.addEventListener('paste', (e)=>{
@@ -693,25 +711,30 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     });
     knownMarkerIds = current;
   }
-  const recentlyCreatedMarkerIds = new Map(); // taskId -> created-at ms, avoids racing our own not-yet-propagated insert
-  function refreshTaskMarkers(){
+  async function refreshTaskMarkers(){
     if(!selectedPageId) return;
     let removedAny = false;
+    const checks = [];
     pageBodyEl.querySelectorAll('.task-marker').forEach(span=>{
       const taskId = span.dataset.taskId;
       const t = todos.find(x=>x.id===taskId);
       if(!t){
-        const createdAt = recentlyCreatedMarkerIds.get(taskId);
-        if(createdAt && Date.now() - createdAt < 8000) return; // still within grace period, may just not have loaded locally yet
-        span.remove();
-        removedAny = true;
+        // Not in the local cache — could mean genuinely deleted, or could mean
+        // it just hasn't propagated here yet. Don't guess based on elapsed time;
+        // ask the server directly.
+        checks.push(
+          sb.from('todos').select('id').eq('id', taskId).then(({data})=>{
+            if(!data || data.length===0){ span.remove(); removedAny = true; }
+          })
+        );
         return;
       }
       const wantChar = t.done ? '✅' : '🔹';
       if(span.textContent !== wantChar) span.textContent = wantChar;
       span.title = t.text + (t.done ? ' (done)' : '') + ' — click to view in Tasks';
     });
-    if(removedAny){ savePage(); establishMarkerBaseline(); }
+    if(checks.length) await Promise.all(checks);
+    if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
   }
 
   function autoFormatList(bodyEl){
@@ -755,7 +778,6 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        recentlyCreatedMarkerIds.set(taskId, Date.now());
         const markerHtml = `&nbsp;<span class="task-marker" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
         document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
         // execCommand leaves the cursor after ALL inserted content (including the
