@@ -224,7 +224,7 @@
 
 <div class="app hidden" id="appRoot">
   <header>
-    <div class="brand">Basecamp&nbsp;Jr.</div>
+    <div class="brand">Basecamp&nbsp;Jr. <span id="versionTag" style="font-family:'Inter',sans-serif;font-size:10px;font-weight:400;color:var(--muted);vertical-align:middle;"></span></div>
     <div class="icons">
       <button class="icon-btn" id="searchBtn" title="Search">🔍</button>
       <button class="icon-btn" id="notifBtn" title="Notifications">🔔<span class="badge hidden" id="notifBadge">0</span></button>
@@ -366,6 +366,9 @@
 </div>
 
 <script>
+// ====== BUILD VERSION — bumped every time a new file is shipped ======
+const APP_VERSION = "2026-09-02.1";
+{ const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MfDYPsXWX9tPFguJDRcTIw_9o3rd47A";
