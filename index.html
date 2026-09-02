@@ -67,9 +67,11 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);}
-  .task-chip{display:inline-flex;align-items:center;gap:5px;background:var(--task-soft);color:var(--task);border-radius:20px;padding:2px 10px 2px 6px;font-size:13px;cursor:pointer;user-select:none;margin:0 2px;}
+  .task-chip{display:inline-flex;align-items:center;gap:5px;background:var(--task-soft);color:var(--task);border-radius:20px;padding:2px 6px 2px 6px;font-size:13px;cursor:pointer;user-select:none;margin:0 2px;}
   .task-chip.done{opacity:0.55;text-decoration:line-through;}
   .task-chip .chip-check{font-size:13px;}
+  .task-chip .chip-del{opacity:0.6;padding:0 2px;font-weight:600;}
+  .task-chip .chip-del:hover{opacity:1;color:var(--danger);}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
@@ -134,9 +136,10 @@
   .gantt-label{font-size:11px;padding:8px;position:sticky;left:0;background:var(--surface);}
 
   .month-today-row{display:flex;justify-content:space-between;margin-bottom:8px;gap:8px;}
-  .multi-month-wrap{max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:10px;margin-bottom:14px;}
-  .month-block{margin-bottom:18px;scroll-margin-top:10px;contain:layout paint;}
-  .month-block:last-child{margin-bottom:4px;}
+  .month-day-layout{display:flex;flex-direction:column;gap:20px;}
+  .month-pane{width:100%;}
+  .day-pane{width:100%;}
+  .day-pane-title{font-family:'Fraunces',serif;font-size:16px;margin-bottom:10px;}
   .cal-head{display:flex;justify-content:center;align-items:center;margin-bottom:8px;}
   .cal-head .month{font-family:'Fraunces',serif;font-size:14px;font-weight:600;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;width:100%;}
@@ -188,15 +191,13 @@
     main{padding:0 32px 32px;}
     header{padding:24px 32px 16px;}
     nav.tabs{max-width:1100px;}
-    .multi-month-wrap{max-height:640px;display:grid;grid-template-columns:repeat(2, 1fr);gap:24px;align-content:start;}
-    .month-block{margin-bottom:0;}
     .gantt-wrap{overflow-x:auto;}
+    .month-day-layout{flex-direction:row;align-items:flex-start;}
+    .month-pane{flex:0 0 33%;max-width:340px;}
+    .day-pane{flex:1;}
     .page-detail-layout{flex-direction:row;align-items:flex-start;}
     .page-main{flex:1;min-width:0;}
     .page-side{width:320px;flex-shrink:0;}
-  }
-  @media (min-width: 1300px){
-    .multi-month-wrap{grid-template-columns:repeat(3, 1fr);}
   }
 </style>
 </head>
@@ -299,8 +300,20 @@
         <button id="subscribeBtn" class="btn-sm">📅 Subscribe (add to Google/Apple Calendar)</button>
         <button id="calToday" class="btn-sm">Today</button>
       </div>
-        <div class="multi-month-wrap" id="multiMonthWrap"></div>
-        <div id="calList"></div>
+        <div class="month-day-layout">
+          <div class="month-pane">
+            <div class="cal-head">
+              <button id="calPrev">‹</button>
+              <div class="month" id="calMonthLabel"></div>
+              <button id="calNext">›</button>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+          <div class="day-pane">
+            <div class="day-pane-title" id="dayPaneTitle"></div>
+            <div id="calList"></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -366,7 +379,6 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   const GANTT_DAYS = 220; // ~45 days back, 175 forward — feels continuous without true infinite-scroll complexity
   const GANTT_DAY_PX = 42;
   let selectedDay = null;
-  const MONTHS_BACK = 12, MONTHS_FWD = 12;
   const focusedFields = new Set();
   let pageBodyFocused = false;
 
@@ -402,7 +414,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
     document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
     $('tab-'+name).classList.add('active');
-    if(name==='sched'){ renderGantt(); renderMultiMonth(); }
+    if(name==='sched'){ renderGantt(); renderScheduleMonth(); }
   }
   document.querySelectorAll('nav.tabs button').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
   function flashAndScroll(elId){
@@ -440,13 +452,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderAll();
     sb.channel('db-live')
       .on('postgres_changes', { event:'*', schema:'public', table:'todo_lists' }, async ()=>{ await loadTodoLists(); renderTodos(); })
-      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderMultiMonth(); renderNotifBadge(); refreshOpenPageChips(); renderPageTasksList(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); refreshOpenPageChips(); renderPageTasksList(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'pages' }, async ()=>{ await loadPages(); renderPagesList(); renderLatest(); if(selectedPageId && !pageBodyFocused) syncPageDetailFromData(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'page_comments' }, async ()=>{ await loadPageComments(); renderPageCommentsPane(); renderLatest(); renderNotifBadge(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'task_comments' }, async ()=>{ await loadTaskComments(); renderTodos(); renderLatest(); renderNotifBadge(); renderPageTasksList(); })
       .subscribe();
   }
-  function renderAll(){ renderLatest(); renderPagesList(); renderTodos(); renderGantt(); renderMultiMonth(); renderNotifBadge(); }
+  function renderAll(){ renderLatest(); renderPagesList(); renderTodos(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); }
 
   // ================= LATEST =================
   function renderLatest(){
@@ -551,48 +563,53 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
     if(e.key === 'Backspace' || e.key === 'Delete'){
       const chip = findAdjacentChip(e.key === 'Backspace' ? 'back' : 'forward');
-      if(chip){ e.preventDefault(); chip.remove(); savePage(); }
+      if(chip){
+        e.preventDefault();
+        const taskId = chip.dataset.taskId;
+        chip.remove();
+        savePage();
+        sb.from('todos').delete().eq('id', taskId);
+      }
     }
   });
 
-  function isWhitespaceNode(n){ return n && n.nodeType===3 && /^[\s\u00A0]*$/.test(n.textContent); }
+  function isWhitespaceNode(n){ return !!n && n.nodeType===3 && /^[\s\u00A0]*$/.test(n.textContent); }
   function findAdjacentChip(direction){
     const sel = window.getSelection();
     if(!sel.rangeCount || !sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
-    let container = range.startContainer, offset = range.startOffset;
-    let ref;
+    const container = range.startContainer, offset = range.startOffset;
+    if(container.nodeType === 1){
+      let candidate = container.childNodes[direction==='back' ? offset-1 : offset];
+      while(isWhitespaceNode(candidate)) candidate = direction==='back' ? candidate.previousSibling : candidate.nextSibling;
+      if(candidate && candidate.nodeType===1 && candidate.classList && candidate.classList.contains('task-chip')) return candidate;
+    }
     if(container.nodeType === 3){
-      if(direction==='back' && offset !== 0) return null;
-      if(direction==='forward' && offset !== container.textContent.length) return null;
-      ref = container;
-    } else {
-      ref = container.childNodes[direction==='back' ? offset-1 : offset] || container;
-      if(direction==='back' && offset===0) ref = container; // handled via parent walk below
+      const atBoundary = direction==='back' ? offset===0 : offset===container.textContent.length;
+      if(atBoundary){
+        let sib = direction==='back' ? container.previousSibling : container.nextSibling;
+        while(isWhitespaceNode(sib)) sib = direction==='back' ? sib.previousSibling : sib.nextSibling;
+        if(sib && sib.nodeType===1 && sib.classList && sib.classList.contains('task-chip')) return sib;
+      }
     }
-    let sibling = direction==='back' ? ref.previousSibling : ref.nextSibling;
-    let node = ref;
-    // walk up out of empty wrapper nodes if needed (e.g. caret at very start/end of a line div)
-    while(!sibling && node && node.parentNode && node.parentNode !== pageBodyEl){
-      node = node.parentNode;
-      sibling = direction==='back' ? node.previousSibling : node.nextSibling;
-    }
-    while(sibling && isWhitespaceNode(sibling)){
-      sibling = direction==='back' ? sibling.previousSibling : sibling.nextSibling;
-    }
-    if(sibling && sibling.nodeType===1 && sibling.classList && sibling.classList.contains('task-chip')) return sibling;
     return null;
   }
   pageBodyEl.addEventListener('click', async (e)=>{
     const chip = e.target.closest('.task-chip');
     if(!chip) return;
     const taskId = chip.dataset.taskId;
+    if(e.target.closest('.chip-del')){
+      chip.remove();
+      savePage();
+      await sb.from('todos').delete().eq('id', taskId);
+      return;
+    }
     if(e.target.closest('.chip-check')){
       const t = todos.find(x=>x.id===taskId);
-      if(t) await sb.from('todos').update({ done: !t.done }).eq('id', taskId);
-    } else {
-      flashAndScroll('side-todo-'+taskId);
+      await sb.from('todos').update({ done: !(t?t.done:false) }).eq('id', taskId);
+      return;
     }
+    flashAndScroll('side-todo-'+taskId);
   });
 
   function autoFormatList(bodyEl){
@@ -631,15 +648,14 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         if(!text || !text.trim()) return;
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
-        const { data } = await sb.from('todos').insert({
-          project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal'
-        }).select();
-        if(data && data[0]){
-          const chipHtml = `&nbsp;<span class="task-chip" contenteditable="false" data-task-id="${data[0].id}"><span class="chip-check">☐</span>${escapeHtml(text.trim())}</span>&nbsp;`;
-          document.execCommand('insertHTML', false, chipHtml);
-          savePage();
-          renderPageTasksList();
-        }
+        const taskId = crypto.randomUUID();
+        const chipHtml = `&nbsp;<span class="task-chip" contenteditable="false" data-task-id="${taskId}"><span class="chip-check">☐</span><span class="chip-text">${escapeHtml(text.trim())}</span><span class="chip-del" title="Remove task">×</span></span>&nbsp;`;
+        document.execCommand('insertHTML', false, chipHtml); // synchronous — happens immediately, replacing the restored selection
+        savePage();
+        renderPageTasksList();
+        sb.from('todos').insert({
+          id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal'
+        }).then(({error})=>{ if(error) console.error('task insert failed', error); });
       } else {
         document.execCommand(cmd, false, null);
         savePage();
@@ -649,14 +665,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   function refreshOpenPageChips(){
     if(!selectedPageId) return;
+    let changed = false;
     pageBodyEl.querySelectorAll('.task-chip').forEach(chip=>{
       const t = todos.find(x=>x.id===chip.dataset.taskId);
-      if(!t){ chip.remove(); return; }
+      if(!t){ chip.remove(); changed = true; return; }
       chip.classList.toggle('done', !!t.done);
       chip.querySelector('.chip-check').textContent = t.done ? '☑' : '☐';
-      const textNode = Array.from(chip.childNodes).find(n=>n.nodeType===3);
-      if(textNode) textNode.textContent = t.text;
+      const txt = chip.querySelector('.chip-text');
+      if(txt && txt.textContent !== t.text) txt.textContent = t.text;
     });
+    if(changed) savePage();
   }
 
   function renderPageTasksList(){
@@ -919,11 +937,22 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const wrap = $('ganttInner').parentElement;
     wrap.scrollTo({ left: Math.max(0, daysFromStart*GANTT_DAY_PX - 80), behavior:'smooth' });
   }
+  let ganttLabelRaf = null;
+  function updateGanttMonthLabel(){
+    if(ganttLabelRaf) return;
+    ganttLabelRaf = requestAnimationFrame(()=>{
+      ganttLabelRaf = null;
+      const wrap = $('ganttInner').parentElement;
+      const dayIndex = Math.max(0, Math.round(wrap.scrollLeft / GANTT_DAY_PX));
+      const d = new Date(ganttStart); d.setDate(d.getDate()+dayIndex);
+      $('ganttRange').textContent = d.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+    });
+  }
+  $('ganttInner').parentElement.addEventListener('scroll', updateGanttMonthLabel);
 
   function renderGantt(){
     const days = [];
     for(let i=0;i<GANTT_DAYS;i++){ const d = new Date(ganttStart); d.setDate(d.getDate()+i); days.push(d); }
-    $('ganttRange').textContent = `${days[0].toLocaleDateString(undefined,{month:'short',day:'numeric'})} – ${days[GANTT_DAYS-1].toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}`;
     const inner = $('ganttInner');
     inner.innerHTML = '';
     const totalWidth = 130 + GANTT_DAYS*GANTT_DAY_PX;
@@ -936,7 +965,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     dayRow.innerHTML = '<div style="position:sticky;left:0;background:var(--surface);"></div>' + days.map(d=>`<div class="gantt-day-cell${d.getDay()===0?' sunday':''}"${localDateStr(d)===today?' style="color:var(--accent);font-weight:700;"':''}>${d.toLocaleDateString(undefined,{weekday:'short'})}<br>${d.getDate()}</div>`).join('');
     inner.appendChild(dayRow);
     const scheduled = todos.filter(t=>t.start_date);
-    if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; setTimeout(scrollGanttToToday, 50); return; }
+    if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; setTimeout(()=>{ scrollGanttToToday(); updateGanttMonthLabel(); }, 50); return; }
     scheduled.forEach(t=>{
       const row = document.createElement('div');
       row.className = 'gantt-row';
@@ -968,62 +997,57 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       row.appendChild(bar);
       inner.appendChild(row);
     });
-    setTimeout(scrollGanttToToday, 50);
+    setTimeout(()=>{ scrollGanttToToday(); updateGanttMonthLabel(); }, 50);
   }
 
-  // ================= SCHEDULE: MULTI-MONTH =================
-  function renderMultiMonth(){
-    const wrap = $('multiMonthWrap');
-    wrap.innerHTML = '';
-    const base = new Date(); base.setDate(1);
-    const dueDates = new Set();
+  // ================= SCHEDULE: MONTH + DAY PANE (iCal-style) =================
+  let calDate = new Date(); calDate.setDate(1);
+
+  function computeDueDatesSet(){
+    const s = new Set();
     todos.forEach(t=>{
       if(!t.start_date) return;
       const end = t.end_date || t.start_date;
       let d = new Date(t.start_date+'T00:00:00');
       const endD = new Date(end+'T00:00:00');
-      while(d<=endD){ dueDates.add(localDateStr(d)); d.setDate(d.getDate()+1); }
+      while(d<=endD){ s.add(localDateStr(d)); d.setDate(d.getDate()+1); }
     });
+    return s;
+  }
+
+  function renderCalendarMonth(){
+    const y = calDate.getFullYear(), m = calDate.getMonth();
+    $('calMonthLabel').textContent = calDate.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+    const grid = $('calGrid');
+    grid.innerHTML = '';
+    ['S','M','T','W','T','F','S'].forEach(d=>{ const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el); });
+    const dueDates = computeDueDatesSet();
     const today = todayStr();
     if(!selectedDay) selectedDay = today;
-    for(let offset=-MONTHS_BACK; offset<=MONTHS_FWD; offset++){
-      const md = new Date(base.getFullYear(), base.getMonth()+offset, 1);
-      const y = md.getFullYear(), m = md.getMonth();
-      const block = document.createElement('div');
-      block.className = 'month-block';
-      block.id = 'month-'+y+'-'+m;
-      const head = document.createElement('div');
-      head.className = 'cal-head';
-      head.innerHTML = `<div class="month">${md.toLocaleDateString(undefined,{month:'long', year:'numeric'})}</div>`;
-      block.appendChild(head);
-      const grid = document.createElement('div');
-      grid.className = 'cal-grid';
-      ['S','M','T','W','T','F','S'].forEach(d=>{ const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el); });
-      const firstDow = new Date(y,m,1).getDay();
-      const daysInMonth = new Date(y,m+1,0).getDate();
-      let cellsUsed = 0;
-      for(let i=0;i<firstDow;i++){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); cellsUsed++; }
-      for(let d=1; d<=daysInMonth; d++){
-        const dateStr = `${y}-${pad(m+1)}-${pad(d)}`;
-        const isSunday = new Date(y,m,d).getDay()===0;
-        const el = document.createElement('div');
-        el.className = 'cal-day' + (isSunday?' sunday':'') + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
-        el.innerHTML = `<span>${d}</span>` + (dueDates.has(dateStr) ? '<span class="dot"></span>' : '');
-        el.addEventListener('click', ()=>{ selectedDay = dateStr; renderMultiMonth(); });
-        grid.appendChild(el);
-        cellsUsed++;
-      }
-      while(cellsUsed < 42){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); cellsUsed++; }
-      block.appendChild(grid);
-      wrap.appendChild(block);
+    const firstDow = new Date(y,m,1).getDay();
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    let cellsUsed = 0;
+    for(let i=0;i<firstDow;i++){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); cellsUsed++; }
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${pad(m+1)}-${pad(d)}`;
+      const isSunday = new Date(y,m,d).getDay()===0;
+      const el = document.createElement('div');
+      el.className = 'cal-day' + (isSunday?' sunday':'') + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
+      el.innerHTML = `<span>${d}</span>` + (dueDates.has(dateStr) ? '<span class="dot"></span>' : '');
+      el.addEventListener('click', ()=>{ selectedDay = dateStr; renderCalendarMonth(); renderCalList(); });
+      grid.appendChild(el);
+      cellsUsed++;
     }
-    renderCalList();
+    while(cellsUsed < 42){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); cellsUsed++; }
   }
+  function renderScheduleMonth(){ renderCalendarMonth(); renderCalList(); }
+
+  $('calPrev').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendarMonth(); });
+  $('calNext').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendarMonth(); });
   $('calToday').addEventListener('click', ()=>{
+    calDate = new Date(); calDate.setDate(1);
     selectedDay = todayStr();
-    renderMultiMonth();
-    const el = document.getElementById('month-'+new Date().getFullYear()+'-'+new Date().getMonth());
-    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    renderCalendarMonth(); renderCalList();
   });
   $('subscribeBtn').addEventListener('click', ()=>{
     if(!ICS_FEED_URL){
@@ -1034,6 +1058,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     alert('Feed URL copied:\n\n' + ICS_FEED_URL + '\n\nGoogle Calendar: Other calendars → From URL → paste it.\nApple Calendar: File → New Calendar Subscription → paste it.');
   });
   function renderCalList(){
+    const d = new Date(selectedDay+'T00:00:00');
+    $('dayPaneTitle').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric', year:'numeric'});
     const list = $('calList');
     list.innerHTML = '';
     const dayTodos = todos.filter(t=>{ if(!t.start_date) return false; const end = t.end_date || t.start_date; return t.start_date <= selectedDay && selectedDay <= end; });
