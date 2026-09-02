@@ -139,14 +139,16 @@
   .month-block:last-child{margin-bottom:4px;}
   .cal-head{display:flex;justify-content:center;align-items:center;margin-bottom:8px;}
   .cal-head .month{font-family:'Fraunces',serif;font-size:14px;font-weight:600;}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;width:100%;}
   .cal-dow{font-size:9px;text-align:center;color:var(--muted);padding-bottom:3px;}
-  .cal-day{aspect-ratio:1;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;position:relative;}
+  .cal-day{aspect-ratio:1;min-width:0;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;position:relative;}
+  .cal-day.sunday{background:var(--gold-soft);}
   .cal-day.empty{background:none;border:none;cursor:default;}
   .cal-day.today{border-color:var(--accent);color:var(--accent);font-weight:600;}
   .cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .cal-day .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);position:absolute;bottom:4px;}
   .cal-day.selected .dot{background:#fff;}
+  .gantt-day-cell.sunday, .gantt-cell.sunday{background:var(--gold-soft);}
   .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
   .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:11px;border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;}
 
@@ -186,7 +188,7 @@
     main{padding:0 32px 32px;}
     header{padding:24px 32px 16px;}
     nav.tabs{max-width:1100px;}
-    .multi-month-wrap{max-height:640px;display:grid;grid-template-columns:repeat(3, 1fr);gap:24px;align-content:start;}
+    .multi-month-wrap{max-height:640px;display:grid;grid-template-columns:repeat(2, 1fr);gap:24px;align-content:start;}
     .month-block{margin-bottom:0;}
     .gantt-wrap{overflow-x:auto;}
     .page-detail-layout{flex-direction:row;align-items:flex-start;}
@@ -194,7 +196,7 @@
     .page-side{width:320px;flex-shrink:0;}
   }
   @media (min-width: 1300px){
-    .multi-month-wrap{grid-template-columns:repeat(4, 1fr);}
+    .multi-month-wrap{grid-template-columns:repeat(3, 1fr);}
   }
 </style>
 </head>
@@ -544,10 +546,43 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('input', ()=>{ autoFormatList(pageBodyEl); savePage(); });
   pageBodyEl.addEventListener('keydown', e=>{
     const mod = e.metaKey || e.ctrlKey;
-    if(mod && e.key.toLowerCase()==='b'){ e.preventDefault(); document.execCommand('bold'); savePage(); }
-    else if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); }
-    else if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); }
+    if(mod && e.key.toLowerCase()==='b'){ e.preventDefault(); document.execCommand('bold'); savePage(); return; }
+    if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); return; }
+    if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
+    if(e.key === 'Backspace' || e.key === 'Delete'){
+      const chip = findAdjacentChip(e.key === 'Backspace' ? 'back' : 'forward');
+      if(chip){ e.preventDefault(); chip.remove(); savePage(); }
+    }
   });
+
+  function isWhitespaceNode(n){ return n && n.nodeType===3 && /^[\s\u00A0]*$/.test(n.textContent); }
+  function findAdjacentChip(direction){
+    const sel = window.getSelection();
+    if(!sel.rangeCount || !sel.isCollapsed) return null;
+    const range = sel.getRangeAt(0);
+    let container = range.startContainer, offset = range.startOffset;
+    let ref;
+    if(container.nodeType === 3){
+      if(direction==='back' && offset !== 0) return null;
+      if(direction==='forward' && offset !== container.textContent.length) return null;
+      ref = container;
+    } else {
+      ref = container.childNodes[direction==='back' ? offset-1 : offset] || container;
+      if(direction==='back' && offset===0) ref = container; // handled via parent walk below
+    }
+    let sibling = direction==='back' ? ref.previousSibling : ref.nextSibling;
+    let node = ref;
+    // walk up out of empty wrapper nodes if needed (e.g. caret at very start/end of a line div)
+    while(!sibling && node && node.parentNode && node.parentNode !== pageBodyEl){
+      node = node.parentNode;
+      sibling = direction==='back' ? node.previousSibling : node.nextSibling;
+    }
+    while(sibling && isWhitespaceNode(sibling)){
+      sibling = direction==='back' ? sibling.previousSibling : sibling.nextSibling;
+    }
+    if(sibling && sibling.nodeType===1 && sibling.classList && sibling.classList.contains('task-chip')) return sibling;
+    return null;
+  }
   pageBodyEl.addEventListener('click', async (e)=>{
     const chip = e.target.closest('.task-chip');
     if(!chip) return;
@@ -898,7 +933,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     dayRow.style.gridTemplateColumns = colTemplate;
     dayRow.style.minWidth = totalWidth+'px';
     const today = todayStr();
-    dayRow.innerHTML = '<div style="position:sticky;left:0;background:var(--surface);"></div>' + days.map(d=>`<div class="gantt-day-cell"${localDateStr(d)===today?' style="color:var(--accent);font-weight:700;"':''}>${d.toLocaleDateString(undefined,{weekday:'short'})}<br>${d.getDate()}</div>`).join('');
+    dayRow.innerHTML = '<div style="position:sticky;left:0;background:var(--surface);"></div>' + days.map(d=>`<div class="gantt-day-cell${d.getDay()===0?' sunday':''}"${localDateStr(d)===today?' style="color:var(--accent);font-weight:700;"':''}>${d.toLocaleDateString(undefined,{weekday:'short'})}<br>${d.getDate()}</div>`).join('');
     inner.appendChild(dayRow);
     const scheduled = todos.filter(t=>t.start_date);
     if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; setTimeout(scrollGanttToToday, 50); return; }
@@ -913,7 +948,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       label.textContent = t.text + (t.start_time ? ` (${fmtTime(t.start_time)})` : '');
       label.addEventListener('click', ()=>{ activateTab('todos'); flashAndScroll('todo-'+t.id); });
       row.appendChild(label);
-      for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'; row.appendChild(c); }
+      for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'+(days[i].getDay()===0?' sunday':''); row.appendChild(c); }
       const start = new Date(t.start_date+'T00:00:00');
       const end = new Date((t.end_date||t.start_date)+'T00:00:00');
       const viewStart = days[0], viewEnd = days[GANTT_DAYS-1];
@@ -970,8 +1005,9 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       for(let i=0;i<firstDow;i++){ const el=document.createElement('div'); el.className='cal-day empty'; grid.appendChild(el); cellsUsed++; }
       for(let d=1; d<=daysInMonth; d++){
         const dateStr = `${y}-${pad(m+1)}-${pad(d)}`;
+        const isSunday = new Date(y,m,d).getDay()===0;
         const el = document.createElement('div');
-        el.className = 'cal-day' + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
+        el.className = 'cal-day' + (isSunday?' sunday':'') + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
         el.innerHTML = `<span>${d}</span>` + (dueDates.has(dateStr) ? '<span class="dot"></span>' : '');
         el.addEventListener('click', ()=>{ selectedDay = dateStr; renderMultiMonth(); });
         grid.appendChild(el);
