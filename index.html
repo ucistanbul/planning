@@ -71,9 +71,9 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
-  .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
-  .task-link:hover{text-decoration-color:var(--task);}
-  .task-link.done{opacity:0.6;text-decoration-line:line-through;}
+  .task-marker{cursor:pointer;padding:0 1px;border-radius:3px;user-select:none;}
+  .task-marker:hover{background:var(--task-soft);}
+  .task-marker.done{opacity:0.5;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
@@ -252,6 +252,7 @@
       </div>
       <div id="pageDetailView" class="hidden">
         <button class="page-back" id="pageBackBtn">‹ All pages</button>
+        <button class="page-back" id="pageDeleteBtn" style="float:right;color:var(--danger);">Delete page</button>
         <div class="page-detail-layout">
           <div class="page-main">
             <input class="page-title-input" id="pageTitleInput" placeholder="Untitled page">
@@ -372,7 +373,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.3";
+const APP_VERSION = "2026-09-03.4";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -657,6 +658,15 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('pagesListView').classList.remove('hidden');
     if(markerCheckInterval){ clearInterval(markerCheckInterval); markerCheckInterval = null; }
   });
+  $('pageDeleteBtn').addEventListener('click', async ()=>{
+    if(!selectedPageId) return;
+    const p = pages.find(x=>x.id===selectedPageId);
+    const ok = confirm(`Delete "${p ? (p.title||'Untitled page') : 'this page'}"? Any tasks created from it stay in Tasks, just unlinked. This can't be undone.`);
+    if(!ok) return;
+    const idToDelete = selectedPageId;
+    $('pageBackBtn').click();
+    await sb.from('pages').delete().eq('id', idToDelete);
+  });
 
   function syncPageDetailFromData(){
     if(toolbarPromptOpen) return;
@@ -699,12 +709,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.execCommand('insertText', false, text);
   });
   pageBodyEl.addEventListener('click', (e)=>{
-    const link = e.target.closest('a.task-link');
+    const link = e.target.closest('.task-marker');
     if(link && link.dataset.taskId){
       flashAndScroll('side-todo-'+link.dataset.taskId);
       // A click on an atomic element can leave the cursor ambiguously on
       // either side of it — force a known position right after, so a
-      // follow-up Backspace unambiguously targets the link.
+      // follow-up Backspace unambiguously targets the marker.
       const r = document.createRange();
       r.setStartAfter(link);
       r.collapse(true);
@@ -744,17 +754,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
 
-  // Simple, robust approach: track which task-link ids exist before an edit,
+  // Simple, robust approach: track which task-marker ids exist before an edit,
   // compare to what exists after. Anything that vanished had its task deleted.
   // No need to reason about exactly how the browser performed the deletion.
   let knownMarkerIds = new Set();
   function scanMarkerIds(){
-    return new Set(
-      Array.from(pageBodyEl.querySelectorAll('.task-link'))
-        .filter(a => a.textContent.trim() !== '') // an emptied <a> that the browser left behind counts as removed
-        .map(s=>s.dataset.taskId)
-        .filter(Boolean)
-    );
+    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-marker')).map(s=>s.dataset.taskId).filter(Boolean));
   }
   function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
   function syncMarkerDeletions(){
@@ -763,17 +768,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       if(!current.has(id)) sb.from('todos').delete().eq('id', id);
     });
     knownMarkerIds = current;
-    // Cosmetic cleanup: strip any emptied <a class="task-link"> husks the
-    // browser left behind rather than removing on its own.
-    pageBodyEl.querySelectorAll('.task-link').forEach(a=>{
-      if(a.textContent.trim() === '') a.remove();
-    });
   }
   async function refreshTaskMarkers(){
     if(!selectedPageId) return;
     let removedAny = false;
     const checks = [];
-    pageBodyEl.querySelectorAll('.task-link').forEach(link=>{
+    pageBodyEl.querySelectorAll('.task-marker').forEach(link=>{
       const taskId = link.dataset.taskId;
       const t = todos.find(x=>x.id===taskId);
       if(!t){
@@ -783,11 +783,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         checks.push(
           sb.from('todos').select('id').eq('id', taskId).then(({data})=>{
             if(!data || data.length===0){
-              // Task is confirmed gone — unwrap the link, keeping its words as
-              // plain text rather than leaving a dead, clickable link behind.
-              const parent = link.parentNode;
-              while(link.firstChild) parent.insertBefore(link.firstChild, link);
-              parent.removeChild(link);
+              link.remove();
               removedAny = true;
             }
           })
@@ -795,7 +791,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         return;
       }
       link.classList.toggle('done', !!t.done);
-      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks';
+      link.textContent = t.done ? '✅' : '🔹';
+      link.title = (t.done ? 'Done — ' : '') + t.text + ' — click to view in Tasks';
     });
     if(checks.length) await Promise.all(checks);
     if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
@@ -808,13 +805,49 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!node || node.nodeType !== 3) return;
     const offset = sel.anchorOffset;
     const textBefore = node.textContent.slice(0, offset);
-    if(/^\*[\u0020\u00A0]$/.test(textBefore)){
-      const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
-      document.execCommand('insertUnorderedList');
-    } else if(/^1\.[\u0020\u00A0]$/.test(textBefore)){
-      const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
-      document.execCommand('insertOrderedList');
+    const bulletMatch = /^\*[\u0020\u00A0]$/.test(textBefore);
+    const numberMatch = /^1\.[\u0020\u00A0]$/.test(textBefore);
+    if(!bulletMatch && !numberMatch) return;
+
+    const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
+
+    // Determine "the current line": a block-level element that's a direct
+    // child of bodyEl, or — if the text sits bare directly in bodyEl with no
+    // wrapper div — the text node itself.
+    let lineEl = node.parentElement;
+    let isBareText = false;
+    if(lineEl === bodyEl){
+      isBareText = true;
+    } else {
+      while(lineEl.parentElement && lineEl.parentElement !== bodyEl) lineEl = lineEl.parentElement;
+      if(lineEl.parentElement !== bodyEl) return; // unexpected structure — bail out safely, no auto-format
     }
+
+    const listTag = bulletMatch ? 'ul' : 'ol';
+    const refEl = isBareText ? node : lineEl;
+    const prevEl = refEl.previousSibling;
+    let listEl = (prevEl && prevEl.nodeType===1 && prevEl.tagName.toLowerCase()===listTag) ? prevEl : null;
+    if(!listEl){
+      listEl = document.createElement(listTag);
+      refEl.parentNode.insertBefore(listEl, refEl);
+    }
+    const li = document.createElement('li');
+    if(isBareText){
+      li.appendChild(node);
+    } else {
+      while(lineEl.firstChild) li.appendChild(lineEl.firstChild);
+      lineEl.remove();
+    }
+    if(li.textContent.trim()===''){
+      li.appendChild(document.createElement('br')); // keep an empty item focusable
+    }
+    listEl.appendChild(li);
+
+    const newRange = document.createRange();
+    newRange.selectNodeContents(li);
+    newRange.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
   }
 
   $('pageToolbar').querySelectorAll('button').forEach(btn=>{
@@ -836,17 +869,23 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         toolbarPromptOpen = false;
         if(!text || !text.trim()) return;
         pageBodyEl.focus();
-        if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        const linkHtml = `&nbsp;<a class="task-link" contenteditable="false" data-task-id="${taskId}" title="Click to view in Tasks">${escapeHtml(text.trim())}</a>&nbsp;`;
-        document.execCommand('insertHTML', false, linkHtml); // synchronous, replaces the restored selection immediately
-        // execCommand leaves the cursor after ALL inserted content (including
-        // the trailing padding space), not right after the link — force it
-        // explicitly so an immediate Backspace targets the link, not the space.
-        const insertedLink = pageBodyEl.querySelector(`.task-link[data-task-id="${taskId}"]`);
-        if(insertedLink){
+        if(savedRange){
+          // Collapse to the END of the selection — the selected words stay
+          // exactly as normal, freely-editable text; only a small marker gets
+          // inserted right after them, carrying the task link.
+          const collapseEnd = document.createRange();
+          collapseEnd.setStart(savedRange.endContainer, savedRange.endOffset);
+          collapseEnd.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(collapseEnd);
+        }
+        const markerHtml = `<span class="task-marker" contenteditable="false" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>`;
+        document.execCommand('insertHTML', false, markerHtml);
+        const insertedMarker = pageBodyEl.querySelector(`.task-marker[data-task-id="${taskId}"]`);
+        if(insertedMarker){
           const r = document.createRange();
-          r.setStartAfter(insertedLink);
+          r.setStartAfter(insertedMarker);
           r.collapse(true);
           sel.removeAllRanges();
           sel.addRange(r);
