@@ -71,7 +71,7 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
-  .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:text;}
+  .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
   .task-link:hover{text-decoration-color:var(--task);}
   .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
@@ -372,7 +372,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.2";
+const APP_VERSION = "2026-09-03.3";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -421,15 +421,21 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function fmtTime(t){ if(!t) return ''; const [h,m]=t.split(':').map(Number); const hr12=((h+11)%12)+1; return `${hr12}:${pad(m)} ${h<12?'AM':'PM'}`; }
   function fmtDateShort(dstr){ return new Date(dstr+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
   function extractDateFromText(text){
+    return extractDateTimeFromText(text).date;
+  }
+  function extractDateTimeFromText(text){
     try{
-      if(!window.chrono || !text) return null;
+      if(!window.chrono || !text) return { date: null, time: null };
       const results = window.chrono.parse(text, new Date(), { forwardDate: true });
       if(results && results.length){
-        const d = results[0].start.date();
-        return localDateStr(d);
+        const comp = results[0].start;
+        const d = comp.date();
+        const date = localDateStr(d);
+        const time = comp.isCertain('hour') ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : null;
+        return { date, time };
       }
     }catch(e){ /* date parsing is a nice-to-have — never let it break task creation */ }
-    return null;
+    return { date: null, time: null };
   }
   function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function linkify(s){ return escapeHtml(s).replace(/(https?:\/\/[^\s<]+)/g, url=>`<a href="${url}" target="_blank" rel="noopener">${url}</a>`); }
@@ -695,12 +701,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('click', (e)=>{
     const link = e.target.closest('a.task-link');
     if(link && link.dataset.taskId){
-      if(e.metaKey || e.ctrlKey){
-        e.preventDefault();
-        flashAndScroll('side-todo-'+link.dataset.taskId);
-      }
-      // Plain click: no special handling needed — the cursor just lands
-      // naturally, same as clicking anywhere else in normal editable text.
+      flashAndScroll('side-todo-'+link.dataset.taskId);
+      // A click on an atomic element can leave the cursor ambiguously on
+      // either side of it — force a known position right after, so a
+      // follow-up Backspace unambiguously targets the link.
+      const r = document.createRange();
+      r.setStartAfter(link);
+      r.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
       return;
     }
     const realLink = e.target.closest('a');
@@ -785,7 +795,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         return;
       }
       link.classList.toggle('done', !!t.done);
-      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks · Cmd/Ctrl+click';
+      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks';
     });
     if(checks.length) await Promise.all(checks);
     if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
@@ -798,10 +808,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!node || node.nodeType !== 3) return;
     const offset = sel.anchorOffset;
     const textBefore = node.textContent.slice(0, offset);
-    if(/^\*\u0020$/.test(textBefore)){
+    if(/^\*[\u0020\u00A0]$/.test(textBefore)){
       const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
       document.execCommand('insertUnorderedList');
-    } else if(/^1\.\u0020$/.test(textBefore)){
+    } else if(/^1\.[\u0020\u00A0]$/.test(textBefore)){
       const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
       document.execCommand('insertOrderedList');
     }
@@ -828,14 +838,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        const linkHtml = `<a class="task-link" data-task-id="${taskId}" title="Click to view in Tasks · Cmd/Ctrl+click">${escapeHtml(text.trim())}</a>`;
+        const linkHtml = `&nbsp;<a class="task-link" contenteditable="false" data-task-id="${taskId}" title="Click to view in Tasks">${escapeHtml(text.trim())}</a>&nbsp;`;
         document.execCommand('insertHTML', false, linkHtml); // synchronous, replaces the restored selection immediately
+        // execCommand leaves the cursor after ALL inserted content (including
+        // the trailing padding space), not right after the link — force it
+        // explicitly so an immediate Backspace targets the link, not the space.
+        const insertedLink = pageBodyEl.querySelector(`.task-link[data-task-id="${taskId}"]`);
+        if(insertedLink){
+          const r = document.createRange();
+          r.setStartAfter(insertedLink);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
         savePage();
         renderPageTasksList();
-        const foundDate = extractDateFromText(text.trim());
+        const found = extractDateTimeFromText(text.trim());
         sb.from('todos').insert({
           id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal',
-          start_date: foundDate, end_date: foundDate
+          start_date: found.date, end_date: found.date, start_time: found.time
         }).then(({error})=>{
           if(error) console.error('task insert failed', error);
         });
@@ -917,9 +938,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!text) return;
     let start = block.querySelector('.task-start').value || null;
     let end = block.querySelector('.task-end').value || null;
-    if(!start){ const found = extractDateFromText(text); if(found) start = found; }
+    let startTime = block.querySelector('.task-start-time').value || null;
+    if(!start){
+      const found = extractDateTimeFromText(text);
+      if(found.date) start = found.date;
+      if(!startTime && found.time) startTime = found.time;
+    }
     if(start && !end) end = start;
-    const startTime = block.querySelector('.task-start-time').value || null;
     const endTime = block.querySelector('.task-end-time').value || null;
     await sb.from('todos').insert({
       project_id: projectId, list_id: listId, text,
