@@ -300,7 +300,7 @@
     </section>
 
     <section id="tab-sched">
-      <h2 class="section-title">Schedule</h2>
+      <h2 class="section-title">Schedule <span class="sub" id="scheduleTodayLabel"></span></h2>
       <div class="sched-toggle">
         <button class="btn-ghost on" id="showGanttBtn">Timeline</button>
         <button class="btn-ghost" id="showCalBtn">Month</button>
@@ -372,7 +372,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.1";
+const APP_VERSION = "2026-09-03.2";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -449,7 +449,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
     document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
     $('tab-'+name).classList.add('active');
-    if(name==='sched'){ renderGantt(); renderScheduleMonth(); }
+    if(name==='sched'){
+      const label = $('scheduleTodayLabel');
+      if(label) label.textContent = '· Today: ' + new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+      renderGantt(); renderScheduleMonth();
+    }
   }
   document.querySelectorAll('nav.tabs button').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
   function flashAndScroll(elId){
@@ -460,6 +464,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       el.classList.add('flash-highlight');
       setTimeout(()=>el.classList.remove('flash-highlight'), 1600);
     }, 60);
+  }
+  function goToTaskContext(t){
+    if(t.page_id){
+      activateTab('notes');
+      openPage(t.page_id);
+      flashAndScroll('side-todo-'+t.id);
+    } else {
+      activateTab('todos');
+      flashAndScroll('todo-'+t.id);
+    }
   }
 
   if(!isConfigured) return;
@@ -701,11 +715,21 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('keyup', e=>{
     if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
   });
+  function insertLinkAtSelection(){
+    pageBodyEl.focus();
+    toolbarPromptOpen = true;
+    const url = prompt('Link URL (include https://)');
+    toolbarPromptOpen = false;
+    if(url) document.execCommand('createLink', false, url);
+    savePage();
+  }
+
   pageBodyEl.addEventListener('keydown', e=>{
     const mod = e.metaKey || e.ctrlKey;
     if(mod && e.key.toLowerCase()==='b'){ e.preventDefault(); document.execCommand('bold'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
+    if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); insertLinkAtSelection(); return; }
     if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
@@ -715,7 +739,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // No need to reason about exactly how the browser performed the deletion.
   let knownMarkerIds = new Set();
   function scanMarkerIds(){
-    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-link')).map(s=>s.dataset.taskId).filter(Boolean));
+    return new Set(
+      Array.from(pageBodyEl.querySelectorAll('.task-link'))
+        .filter(a => a.textContent.trim() !== '') // an emptied <a> that the browser left behind counts as removed
+        .map(s=>s.dataset.taskId)
+        .filter(Boolean)
+    );
   }
   function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
   function syncMarkerDeletions(){
@@ -724,6 +753,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       if(!current.has(id)) sb.from('todos').delete().eq('id', id);
     });
     knownMarkerIds = current;
+    // Cosmetic cleanup: strip any emptied <a class="task-link"> husks the
+    // browser left behind rather than removing on its own.
+    pageBodyEl.querySelectorAll('.task-link').forEach(a=>{
+      if(a.textContent.trim() === '') a.remove();
+    });
   }
   async function refreshTaskMarkers(){
     if(!selectedPageId) return;
@@ -779,11 +813,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       pageBodyEl.focus();
       const cmd = btn.dataset.cmd;
       if(cmd==='link'){
-        toolbarPromptOpen = true;
-        const url = prompt('Link URL (include https://)');
-        toolbarPromptOpen = false;
-        if(url) document.execCommand('createLink', false, url);
-        savePage();
+        insertLinkAtSelection();
       } else if(cmd==='task'){
         const sel = window.getSelection();
         let savedRange = null, defaultText = '';
@@ -1238,7 +1268,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       label.className = 'gantt-label';
       label.style.cursor = 'pointer';
       label.textContent = t.text + (t.start_time ? ` (${fmtTime(t.start_time)})` : '');
-      label.addEventListener('click', ()=>{ activateTab('todos'); flashAndScroll('todo-'+t.id); });
+      label.addEventListener('click', ()=>goToTaskContext(t));
       row.appendChild(label);
       for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'+(days[i].getDay()===0?' sunday':'')+(days[i].getDate()===1?' month-start':''); row.appendChild(c); }
       const start = new Date(t.start_date+'T00:00:00');
@@ -1255,7 +1285,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       bar.style.width = `${span*GANTT_DAY_PX - 4}px`;
       bar.style.cursor = 'pointer';
       bar.textContent = t.text;
-      bar.addEventListener('click', ()=>{ activateTab('todos'); flashAndScroll('todo-'+t.id); });
+      bar.addEventListener('click', ()=>goToTaskContext(t));
       row.style.position = 'relative';
       row.appendChild(bar);
       inner.appendChild(row);
@@ -1364,7 +1394,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       const timeLabel = t.start_time ? `${fmtTime(t.start_time)}${t.end_time?'–'+fmtTime(t.end_time):''}` : 'All day';
       row.innerHTML = `<div style="cursor:pointer;"><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'} · ${timeLabel}</div></div><button class="cal-add">Add to calendar</button>`;
       row.querySelector('div > div').textContent = t.text;
-      row.querySelector('div').addEventListener('click', ()=>jumpToDate(t.start_date));
+      row.querySelector('div').addEventListener('click', ()=>goToTaskContext(t));
       row.querySelector('.cal-add').addEventListener('click', (e)=>{ e.stopPropagation(); downloadICS(t); });
       list.appendChild(row);
     });
