@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Basecamp Jr.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   import * as chronoModule from 'https://cdn.jsdelivr.net/npm/chrono-node/+esm';
@@ -13,27 +13,29 @@
 </script>
 <style>
   :root{
-    --bg:#FAF8F3; --surface:#FFFFFF; --ink:#20261F; --muted:#7C7568;
-    --accent:#3A6B63; --accent-soft:#DEEAE6; --gold:#B08600; --gold-soft:#F3E9CC;
-    --border:#E4E0D3; --danger:#B5533E;
-    --task:#3A6B63; --task-soft:#DEEAE6;
+    --bg:#F6F4EE; --surface:#FFFFFF; --ink:#1D2420; --muted:#6E6A5F;
+    --accent:#2E5C53; --accent-soft:#DCEAE6; --gold:#A6790A; --gold-soft:#F3E9CC;
+    --border:#E1DDD0; --danger:#B5533E;
+    --task:#2E5C53; --task-soft:#DCEAE6;
     --page:#8A5A3B; --page-soft:#F0E1D3;
-    --msg:#4A6FA5; --msg-soft:#DCE6F2;
-    --comment:#B08600; --comment-soft:#F3E9CC;
+    --msg:#3E6499; --msg-soft:#DCE6F2;
+    --comment:#A6790A; --comment-soft:#F3E9CC;
     --radius:10px;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:112px;}
   header{padding:20px 16px 12px;display:flex;align-items:center;justify-content:space-between;}
-  header .brand{font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  .today-strip{margin:0 16px 14px;padding:10px 14px;background:var(--accent-soft);border-radius:8px;display:flex;align-items:center;gap:9px;font-family:'Manrope',sans-serif;font-size:15px;font-weight:700;color:var(--accent);}
+  .today-strip::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+  header .brand{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
   header .icons{display:flex;gap:8px;align-items:center;}
   header .icon-btn{position:relative;font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:5px;}
   header .icon-btn .badge{position:absolute;top:-2px;right:-2px;background:var(--danger);color:#fff;font-size:9px;border-radius:20px;min-width:14px;height:14px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
   main{flex:1;padding:0 16px 24px;}
   section{display:none;}
   section.active{display:block;}
-  h2.section-title{font-family:'Fraunces',serif;font-size:17px;font-weight:500;margin:4px 0 12px;display:flex;align-items:center;justify-content:space-between;}
+  h2.section-title{font-family:'Manrope',sans-serif;font-size:17px;font-weight:500;margin:4px 0 12px;display:flex;align-items:center;justify-content:space-between;}
   h2.section-title .sub{color:var(--muted);font-weight:400;font-size:12px;}
   .empty{color:var(--muted);font-size:14px;padding:22px 4px;text-align:center;}
 
@@ -57,7 +59,7 @@
 
   /* --- Pages list --- */
   .page-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--page);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer;}
-  .page-row .title{font-family:'Fraunces',serif;font-size:15px;}
+  .page-row .title{font-family:'Manrope',sans-serif;font-size:15px;}
   .page-row .meta{font-size:11px;color:var(--muted);margin-top:3px;}
   .page-row .arrow{color:var(--muted);}
   .new-page-btn{width:100%;background:none;border:1px dashed var(--border);border-radius:var(--radius);padding:11px;font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:14px;}
@@ -65,7 +67,7 @@
 
   /* --- Page detail --- */
   .page-detail-layout{display:flex;flex-direction:column;gap:18px;}
-  .page-title-input{font-family:'Fraunces',serif;font-size:20px;font-weight:600;border:none;background:none;width:100%;outline:none;margin-bottom:8px;}
+  .page-title-input{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;border:none;background:none;width:100%;outline:none;margin-bottom:8px;}
   .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;}
   .page-toolbar button{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 8px;font-size:12px;cursor:pointer;font-family:inherit;}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
@@ -75,12 +77,12 @@
   .task-link:hover{text-decoration-color:var(--task);}
   .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
-  .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
+  .side-block-title{font-family:'Manrope',sans-serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
   /* --- Tasks (shared with sidebar) --- */
   .list-block{margin-bottom:20px;}
   .list-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-  .list-head .name{font-family:'Fraunces',serif;font-size:15px;}
+  .list-head .name{font-family:'Manrope',sans-serif;font-size:15px;}
   .todo{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--task);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
   .todo.done{opacity:0.5;}
   .todo-row{display:flex;align-items:flex-start;gap:10px;}
@@ -126,10 +128,10 @@
   .sched-toggle{display:flex;gap:6px;margin-bottom:14px;}
   .gantt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;}
   .gantt-head button{border:none;background:var(--surface);border:1px solid var(--border);width:28px;height:28px;border-radius:8px;font-size:14px;cursor:pointer;}
-  .gantt-head .range{font-family:'Fraunces',serif;font-size:14px;flex:1;text-align:center;}
+  .gantt-head .range{font-family:'Manrope',sans-serif;font-size:14px;flex:1;text-align:center;}
   .gantt-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
   .gantt-months{display:grid;border-bottom:1px solid var(--border);background:var(--accent-soft);}
-  .gantt-month-band{font-family:'Fraunces',serif;font-size:13px;font-weight:600;color:var(--accent);padding:6px 0 6px 8px;border-left:2px solid var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .gantt-month-band{font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;color:var(--accent);padding:6px 0 6px 8px;border-left:2px solid var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .gantt-month-band.alt{background:var(--page-soft);color:var(--page);}
   .gantt-days{display:grid;font-size:9px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);}
   .gantt-day-cell{padding:6px 0;border-right:1px solid var(--border);}
@@ -144,13 +146,13 @@
   .month-day-layout{display:flex;flex-direction:column;gap:20px;}
   .month-pane{width:100%;}
   .day-pane{width:100%;}
-  .day-pane-title{font-family:'Fraunces',serif;font-size:16px;margin-bottom:10px;}
+  .day-pane-title{font-family:'Manrope',sans-serif;font-size:16px;margin-bottom:10px;}
   .months-triple-wrap{max-height:520px;overflow-y:auto;display:flex;flex-direction:column;gap:20px;padding-right:4px;}
-  .cal-head-mini{font-family:'Fraunces',serif;font-size:13px;font-weight:600;text-align:center;margin-bottom:6px;color:var(--muted);}
-  .agenda-date-header{font-family:'Fraunces',serif;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px;}
+  .cal-head-mini{font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;text-align:center;margin-bottom:6px;color:var(--muted);}
+  .agenda-date-header{font-family:'Manrope',sans-serif;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px;}
   .agenda-date-header:first-child{margin-top:0;}
   .cal-head{display:flex;justify-content:center;align-items:center;margin-bottom:8px;}
-  .cal-head .month{font-family:'Fraunces',serif;font-size:14px;font-weight:600;}
+  .cal-head .month{font-family:'Manrope',sans-serif;font-size:14px;font-weight:600;}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;width:100%;}
   .cal-dow{font-size:9px;text-align:center;color:var(--muted);padding-bottom:3px;}
   .cal-day{aspect-ratio:1;min-width:0;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;position:relative;}
@@ -175,7 +177,7 @@
 
   .modal-back{position:fixed;inset:0;background:rgba(30,25,15,0.4);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px;}
   .modal{background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:340px;}
-  .modal h3{font-family:'Fraunces',serif;margin:0 0 6px;font-size:18px;}
+  .modal h3{font-family:'Manrope',sans-serif;margin:0 0 6px;font-size:18px;}
   .modal p{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.5;}
   .modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;margin-bottom:12px;}
   .modal button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
@@ -190,7 +192,7 @@
   .setup-warning{background:#F5E1DC;color:var(--danger);border-radius:var(--radius);padding:14px;margin:18px;font-size:13px;line-height:1.5;}
   .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
   .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:340px;width:100%;}
-  .auth-card h1{font-family:'Fraunces',serif;font-size:22px;margin:0 0 6px;}
+  .auth-card h1{font-family:'Manrope',sans-serif;font-size:22px;margin:0 0 6px;}
   .auth-card p{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
   .auth-card input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;margin-bottom:10px;}
   .auth-card button{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-family:inherit;font-weight:600;cursor:pointer;}
@@ -200,6 +202,7 @@
     .app{max-width:1100px;padding-bottom:40px;}
     main{padding:0 32px 32px;}
     header{padding:24px 32px 16px;}
+    .today-strip{margin:0 32px 16px;}
     nav.tabs{max-width:1100px;}
     .gantt-wrap{overflow-x:auto;}
     .month-day-layout{flex-direction:row;align-items:flex-start;}
@@ -237,7 +240,7 @@
       <button class="icon-btn" id="signOutBtn">Sign out</button>
     </div>
   </header>
-  <div id="globalTodayRow" style="padding:0 16px 10px;font-size:11px;color:var(--muted);"></div>
+  <div id="globalTodayRow" class="today-strip"></div>
 
   <main>
     <section id="tab-latest" class="active">
@@ -366,7 +369,7 @@
 
 <div class="overlay hidden" id="notifOverlay">
   <div class="overlay-head">
-    <div style="font-family:'Fraunces',serif;font-size:17px;">Notifications</div>
+    <div style="font-family:'Manrope',sans-serif;font-size:17px;">Notifications</div>
     <button class="close" id="notifClose" style="margin-left:auto;">×</button>
   </div>
   <div class="overlay-body" id="notifResults"></div>
@@ -374,7 +377,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.5";
+const APP_VERSION = "2026-09-03.6";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
