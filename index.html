@@ -7,6 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+  import * as chronoModule from 'https://cdn.jsdelivr.net/npm/chrono-node/+esm';
+  window.chrono = chronoModule;
+</script>
 <style>
   :root{
     --bg:#FAF8F3; --surface:#FFFFFF; --ink:#20261F; --muted:#7C7568;
@@ -67,8 +71,9 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
-  .task-marker{cursor:pointer;padding:0 1px;border-radius:3px;}
-  .task-marker:hover{background:var(--task-soft);}
+  .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:text;}
+  .task-link:hover{text-decoration-color:var(--task);}
+  .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
@@ -367,7 +372,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-02.2-debug";
+const APP_VERSION = "2026-09-03.1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -415,6 +420,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   }
   function fmtTime(t){ if(!t) return ''; const [h,m]=t.split(':').map(Number); const hr12=((h+11)%12)+1; return `${hr12}:${pad(m)} ${h<12?'AM':'PM'}`; }
   function fmtDateShort(dstr){ return new Date(dstr+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  function extractDateFromText(text){
+    try{
+      if(!window.chrono || !text) return null;
+      const results = window.chrono.parse(text, new Date(), { forwardDate: true });
+      if(results && results.length){
+        const d = results[0].start.date();
+        return localDateStr(d);
+      }
+    }catch(e){ /* date parsing is a nice-to-have — never let it break task creation */ }
+    return null;
+  }
   function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function linkify(s){ return escapeHtml(s).replace(/(https?:\/\/[^\s<]+)/g, url=>`<a href="${url}" target="_blank" rel="noopener">${url}</a>`); }
 
@@ -663,25 +679,20 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.execCommand('insertText', false, text);
   });
   pageBodyEl.addEventListener('click', (e)=>{
-    const link = e.target.closest('a');
-    if(link && (e.metaKey || e.ctrlKey)){
-      e.preventDefault();
-      window.open(link.href, '_blank', 'noopener');
+    const link = e.target.closest('a.task-link');
+    if(link && link.dataset.taskId){
+      if(e.metaKey || e.ctrlKey){
+        e.preventDefault();
+        flashAndScroll('side-todo-'+link.dataset.taskId);
+      }
+      // Plain click: no special handling needed — the cursor just lands
+      // naturally, same as clicking anywhere else in normal editable text.
       return;
     }
-    const marker = e.target.closest('.task-marker');
-    if(marker && marker.dataset.taskId){
-      flashAndScroll('side-todo-'+marker.dataset.taskId);
-      // A click on a single inline character can leave the browser's cursor on
-      // either side of it depending on exact click position — which made a
-      // follow-up Backspace unpredictably delete neighboring content instead of
-      // the marker. Force it to a known position right after the marker.
-      const range = document.createRange();
-      range.setStartAfter(marker);
-      range.collapse(true);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
+    const realLink = e.target.closest('a');
+    if(realLink && (e.metaKey || e.ctrlKey)){
+      e.preventDefault();
+      window.open(realLink.href, '_blank', 'noopener');
     }
   });
   pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
@@ -699,24 +710,18 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
 
-  // Simple, robust approach: track which task-marker ids exist before an edit,
+  // Simple, robust approach: track which task-link ids exist before an edit,
   // compare to what exists after. Anything that vanished had its task deleted.
   // No need to reason about exactly how the browser performed the deletion.
   let knownMarkerIds = new Set();
   function scanMarkerIds(){
-    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-marker')).map(s=>s.dataset.taskId).filter(Boolean));
+    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-link')).map(s=>s.dataset.taskId).filter(Boolean));
   }
-  function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); console.log('[DEBUG] baseline established:', [...knownMarkerIds]); }
+  function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
   function syncMarkerDeletions(){
     const current = scanMarkerIds();
-    console.log('[DEBUG] syncMarkerDeletions: knownMarkerIds=', [...knownMarkerIds], 'current=', [...current]);
     knownMarkerIds.forEach(id=>{
-      if(!current.has(id)){
-        console.log('[DEBUG] marker id missing from current scan, deleting task:', id);
-        sb.from('todos').delete().eq('id', id).then(({error})=>{
-          console.log('[DEBUG] delete() result for', id, 'error=', error);
-        });
-      }
+      if(!current.has(id)) sb.from('todos').delete().eq('id', id);
     });
     knownMarkerIds = current;
   }
@@ -724,8 +729,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!selectedPageId) return;
     let removedAny = false;
     const checks = [];
-    pageBodyEl.querySelectorAll('.task-marker').forEach(span=>{
-      const taskId = span.dataset.taskId;
+    pageBodyEl.querySelectorAll('.task-link').forEach(link=>{
+      const taskId = link.dataset.taskId;
       const t = todos.find(x=>x.id===taskId);
       if(!t){
         // Not in the local cache — could mean genuinely deleted, or could mean
@@ -733,14 +738,20 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         // ask the server directly.
         checks.push(
           sb.from('todos').select('id').eq('id', taskId).then(({data})=>{
-            if(!data || data.length===0){ span.remove(); removedAny = true; }
+            if(!data || data.length===0){
+              // Task is confirmed gone — unwrap the link, keeping its words as
+              // plain text rather than leaving a dead, clickable link behind.
+              const parent = link.parentNode;
+              while(link.firstChild) parent.insertBefore(link.firstChild, link);
+              parent.removeChild(link);
+              removedAny = true;
+            }
           })
         );
         return;
       }
-      const wantChar = t.done ? '✅' : '🔹';
-      if(span.textContent !== wantChar) span.textContent = wantChar;
-      span.title = t.text + (t.done ? ' (done)' : '') + ' — click to view in Tasks';
+      link.classList.toggle('done', !!t.done);
+      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks · Cmd/Ctrl+click';
     });
     if(checks.length) await Promise.all(checks);
     if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
@@ -787,24 +798,14 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         pageBodyEl.focus();
         if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        const markerHtml = `&nbsp;<span class="task-marker" contenteditable="false" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>&nbsp;`;
-        document.execCommand('insertHTML', false, markerHtml); // synchronous, replaces the restored selection immediately
-        // execCommand leaves the cursor after ALL inserted content (including the
-        // trailing padding space), not right after the marker — which meant the
-        // very next Backspace deleted that space instead of the marker. Fix the
-        // cursor position explicitly.
-        const insertedMarker = pageBodyEl.querySelector(`.task-marker[data-task-id="${taskId}"]`);
-        if(insertedMarker){
-          const r = document.createRange();
-          r.setStartAfter(insertedMarker);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-        }
+        const linkHtml = `<a class="task-link" data-task-id="${taskId}" title="Click to view in Tasks · Cmd/Ctrl+click">${escapeHtml(text.trim())}</a>`;
+        document.execCommand('insertHTML', false, linkHtml); // synchronous, replaces the restored selection immediately
         savePage();
         renderPageTasksList();
+        const foundDate = extractDateFromText(text.trim());
         sb.from('todos').insert({
-          id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal'
+          id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal',
+          start_date: foundDate, end_date: foundDate
         }).then(({error})=>{
           if(error) console.error('task insert failed', error);
         });
@@ -886,6 +887,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!text) return;
     let start = block.querySelector('.task-start').value || null;
     let end = block.querySelector('.task-end').value || null;
+    if(!start){ const found = extractDateFromText(text); if(found) start = found; }
     if(start && !end) end = start;
     const startTime = block.querySelector('.task-start-time').value || null;
     const endTime = block.querySelector('.task-end-time').value || null;
