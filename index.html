@@ -71,9 +71,9 @@
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
-  .task-marker{cursor:pointer;padding:0 1px;border-radius:3px;user-select:none;}
-  .task-marker:hover{background:var(--task-soft);}
-  .task-marker.done{opacity:0.5;}
+  .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
+  .task-link:hover{text-decoration-color:var(--task);}
+  .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Fraunces',serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
 
@@ -237,6 +237,7 @@
       <button class="icon-btn" id="signOutBtn">Sign out</button>
     </div>
   </header>
+  <div id="globalTodayRow" style="padding:0 16px 10px;font-size:11px;color:var(--muted);"></div>
 
   <main>
     <section id="tab-latest" class="active">
@@ -301,7 +302,7 @@
     </section>
 
     <section id="tab-sched">
-      <h2 class="section-title">Schedule <span class="sub" id="scheduleTodayLabel"></span></h2>
+      <h2 class="section-title">Schedule</h2>
       <div class="sched-toggle">
         <button class="btn-ghost on" id="showGanttBtn">Timeline</button>
         <button class="btn-ghost" id="showCalBtn">Month</button>
@@ -373,7 +374,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.4";
+const APP_VERSION = "2026-09-03.5";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -452,15 +453,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderNotifBadge();
   });
 
+  function renderGlobalToday(){
+    const row = $('globalTodayRow');
+    if(row) row.textContent = 'Today: ' + new Date().toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  }
   function activateTab(name){
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
     document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
     $('tab-'+name).classList.add('active');
-    if(name==='sched'){
-      const label = $('scheduleTodayLabel');
-      if(label) label.textContent = '· Today: ' + new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'});
-      renderGantt(); renderScheduleMonth();
-    }
+    renderGlobalToday();
+    if(name==='sched'){ renderGantt(); renderScheduleMonth(); }
   }
   document.querySelectorAll('nav.tabs button').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
   function flashAndScroll(elId){
@@ -487,7 +489,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   // ---------- Auth ----------
   let appInitialized = false;
-  function showApp(){ $('authScreen').classList.add('hidden'); $('appRoot').classList.remove('hidden'); if(!appInitialized){ appInitialized=true; bootstrap(); } }
+  function showApp(){ $('authScreen').classList.add('hidden'); $('appRoot').classList.remove('hidden'); renderGlobalToday(); if(!appInitialized){ appInitialized=true; bootstrap(); } }
   function showAuth(){ $('appRoot').classList.add('hidden'); $('authScreen').classList.remove('hidden'); }
   $('authSendBtn').addEventListener('click', async ()=>{
     const email = $('authEmail').value.trim();
@@ -709,7 +711,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.execCommand('insertText', false, text);
   });
   pageBodyEl.addEventListener('click', (e)=>{
-    const link = e.target.closest('.task-marker');
+    const link = e.target.closest('a.task-link');
     if(link && link.dataset.taskId){
       flashAndScroll('side-todo-'+link.dataset.taskId);
       // A click on an atomic element can leave the cursor ambiguously on
@@ -754,12 +756,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
 
-  // Simple, robust approach: track which task-marker ids exist before an edit,
+  // Simple, robust approach: track which task-link ids exist before an edit,
   // compare to what exists after. Anything that vanished had its task deleted.
   // No need to reason about exactly how the browser performed the deletion.
   let knownMarkerIds = new Set();
   function scanMarkerIds(){
-    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-marker')).map(s=>s.dataset.taskId).filter(Boolean));
+    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-link')).map(s=>s.dataset.taskId).filter(Boolean));
   }
   function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
   function syncMarkerDeletions(){
@@ -773,7 +775,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!selectedPageId) return;
     let removedAny = false;
     const checks = [];
-    pageBodyEl.querySelectorAll('.task-marker').forEach(link=>{
+    pageBodyEl.querySelectorAll('.task-link').forEach(link=>{
       const taskId = link.dataset.taskId;
       const t = todos.find(x=>x.id===taskId);
       if(!t){
@@ -783,7 +785,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         checks.push(
           sb.from('todos').select('id').eq('id', taskId).then(({data})=>{
             if(!data || data.length===0){
-              link.remove();
+              // Task is confirmed gone — unwrap the link, keeping its words as
+              // plain text rather than leaving a dead, clickable link behind.
+              const parent = link.parentNode;
+              while(link.firstChild) parent.insertBefore(link.firstChild, link);
+              parent.removeChild(link);
               removedAny = true;
             }
           })
@@ -791,8 +797,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         return;
       }
       link.classList.toggle('done', !!t.done);
-      link.textContent = t.done ? '✅' : '🔹';
-      link.title = (t.done ? 'Done — ' : '') + t.text + ' — click to view in Tasks';
+      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks';
     });
     if(checks.length) await Promise.all(checks);
     if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
@@ -869,23 +874,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         toolbarPromptOpen = false;
         if(!text || !text.trim()) return;
         pageBodyEl.focus();
+        if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
         const taskId = crypto.randomUUID();
-        if(savedRange){
-          // Collapse to the END of the selection — the selected words stay
-          // exactly as normal, freely-editable text; only a small marker gets
-          // inserted right after them, carrying the task link.
-          const collapseEnd = document.createRange();
-          collapseEnd.setStart(savedRange.endContainer, savedRange.endOffset);
-          collapseEnd.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(collapseEnd);
-        }
-        const markerHtml = `<span class="task-marker" contenteditable="false" data-task-id="${taskId}" title="${escapeHtml(text.trim())} — click to view in Tasks">🔹</span>`;
-        document.execCommand('insertHTML', false, markerHtml);
-        const insertedMarker = pageBodyEl.querySelector(`.task-marker[data-task-id="${taskId}"]`);
-        if(insertedMarker){
+        const linkHtml = `&nbsp;<a class="task-link" contenteditable="false" data-task-id="${taskId}" title="Click to view in Tasks">${escapeHtml(text.trim())}</a>&nbsp;`;
+        document.execCommand('insertHTML', false, linkHtml); // synchronous, replaces the restored selection immediately
+        // execCommand leaves the cursor after ALL inserted content (including
+        // the trailing padding space), not right after the link — force it
+        // explicitly so an immediate Backspace targets the link, not the space.
+        const insertedLink = pageBodyEl.querySelector(`.task-link[data-task-id="${taskId}"]`);
+        if(insertedLink){
           const r = document.createRange();
-          r.setStartAfter(insertedMarker);
+          r.setStartAfter(insertedLink);
           r.collapse(true);
           sel.removeAllRanges();
           sel.addRange(r);
