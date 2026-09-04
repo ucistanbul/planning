@@ -41,9 +41,9 @@
 
   html[data-theme="mono"]{
     --bg:#FFFFFF; --surface:#FAFAFA; --ink:#111111; --muted:#666666;
-    --accent:#1D4ED8; --accent-soft:#E3EAFB; --gold:#B45309; --gold-soft:#FDECC8;
+    --accent:#1E3A5F; --accent-soft:#E3E9F1; --gold:#B45309; --gold-soft:#FDECC8;
     --border:#E5E5E5; --danger:#C0392B;
-    --task:#1D4ED8; --task-soft:#E3EAFB;
+    --task:#1E3A5F; --task-soft:#E3E9F1;
     --page:#6D5A94; --page-soft:#ECE7F4;
     --msg:#2F7B6E; --msg-soft:#DFF0EC;
     --comment:#B45309; --comment-soft:#FDECC8;
@@ -128,7 +128,7 @@
   .theme-swatch-navy span:nth-child(2){background:#1E3A5F;}
   .theme-swatch-navy span:nth-child(3){background:#6B4A7A;}
   .theme-swatch-mono span:nth-child(1){background:#FFFFFF;border:1px solid #E5E5E5;}
-  .theme-swatch-mono span:nth-child(2){background:#1D4ED8;}
+  .theme-swatch-mono span:nth-child(2){background:#1E3A5F;}
   .theme-swatch-mono span:nth-child(3){background:#111111;}
   .theme-card-label{font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;color:var(--ink);}
   .theme-card-sub{font-size:11px;color:var(--muted);margin-top:2px;}
@@ -212,12 +212,15 @@
   .cal-day{aspect-ratio:1;min-width:0;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;background:var(--bg);border:1px solid var(--border);cursor:pointer;position:relative;}
   .cal-day.sunday{background:var(--gold-soft);}
   .cal-day.empty{background:none;border:none;cursor:default;}
-  .cal-day.today{border-color:var(--accent);color:var(--accent);font-weight:600;}
+  .cal-day.today{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:800;}
+  .cal-day.today .dot{background:#fff;}
   .cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .cal-day .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);position:absolute;bottom:4px;}
   .cal-day.selected .dot{background:#fff;}
   .gantt-day-cell.sunday, .gantt-cell.sunday{background:var(--gold-soft);}
   .gantt-day-cell.month-start, .gantt-cell.month-start{border-left:2px solid var(--ink);}
+  .gantt-day-cell.today-col{background:var(--accent);color:#fff !important;font-weight:800;}
+  .gantt-cell.today-col{background:var(--accent-soft);}
   .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
   .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:11px;border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;}
 
@@ -292,6 +295,7 @@
     <div class="icons">
       <button class="icon-btn" id="searchBtn" title="Search">🔍</button>
       <button class="icon-btn" id="notifBtn" title="Notifications">🔔<span class="badge hidden" id="notifBadge">0</span></button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">⚙︎</button>
       <button class="icon-btn" id="whoBtn">···</button>
       <button class="icon-btn" id="signOutBtn">Sign out</button>
     </div>
@@ -397,33 +401,6 @@
       </div>
     </section>
 
-    <section id="tab-settings">
-      <h2 class="section-title">Settings</h2>
-      <div class="side-block-title">Appearance</div>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">Choose how the app looks. This is saved on this device only — everyone on the team can pick their own.</p>
-      <div class="theme-grid">
-        <button class="theme-card" data-theme-choice="classic">
-          <div class="theme-swatch theme-swatch-classic">
-            <span></span><span></span><span></span>
-          </div>
-          <div class="theme-card-label">Classic</div>
-          <div class="theme-card-sub">Warm paper, teal accent</div>
-        </button>
-        <button class="theme-card" data-theme-choice="navy">
-          <div class="theme-swatch theme-swatch-navy">
-            <span></span><span></span><span></span>
-          </div>
-          <div class="theme-card-label">Navy</div>
-          <div class="theme-card-sub">Cool neutral, navy accent</div>
-        </button>
-        <button class="theme-card" data-theme-choice="mono">
-          <div class="theme-swatch theme-swatch-mono">
-            <span></span><span></span><span></span>
-          </div>
-          <div class="theme-card-label">Mono</div>
-          <div class="theme-card-sub">White, Helvetica, blue accent</div>
-        </button>
-      </div>
     </section>
   </main>
 
@@ -432,7 +409,6 @@
     <button data-tab="notes"><span class="tab-icon">📝</span><span class="tab-label">Pages</span></button>
     <button data-tab="todos"><span class="tab-icon">✓</span><span class="tab-label">Tasks</span></button>
     <button data-tab="sched"><span class="tab-icon">▦</span><span class="tab-label">Schedule</span></button>
-    <button data-tab="settings"><span class="tab-icon">⚙︎</span><span class="tab-label">Settings</span></button>
   </nav>
 </div>
 
@@ -461,9 +437,43 @@
   <div class="overlay-body" id="notifResults"></div>
 </div>
 
+<div class="overlay hidden" id="settingsOverlay">
+  <div class="overlay-head">
+    <div style="font-family:'Manrope',sans-serif;font-size:17px;">Settings</div>
+    <button class="close" id="settingsClose" style="margin-left:auto;">×</button>
+  </div>
+  <div class="overlay-body">
+    <div class="side-block-title">Appearance</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">Choose how the app looks. This is saved on this device only — everyone on the team can pick their own.</p>
+    <div class="theme-grid">
+      <button class="theme-card" data-theme-choice="classic">
+        <div class="theme-swatch theme-swatch-classic">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="theme-card-label">Classic</div>
+        <div class="theme-card-sub">Warm paper, teal accent</div>
+      </button>
+      <button class="theme-card" data-theme-choice="navy">
+        <div class="theme-swatch theme-swatch-navy">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="theme-card-label">Navy</div>
+        <div class="theme-card-sub">Cool neutral, navy accent</div>
+      </button>
+      <button class="theme-card" data-theme-choice="mono">
+        <div class="theme-swatch theme-swatch-mono">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="theme-card-label">Mono</div>
+        <div class="theme-card-sub">White, Helvetica, navy accent</div>
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.8";
+const APP_VERSION = "2026-09-03.9";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // ====== CONNECT YOUR SUPABASE PROJECT HERE ======
 const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
@@ -1298,6 +1308,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
     const commentCount = taskComments.filter(c=>c.task_id===t.id).length;
     const sourcePage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
+    const dateBit = t.start_date ? ` · ${fmtDateShort(t.start_date)}${t.end_date && t.end_date!==t.start_date ? '–'+fmtDateShort(t.end_date):''}${t.start_time?' '+fmtTime(t.start_time):''}` : '';
+    row.title = `${t.text}${t.assignee?' · '+t.assignee:''}${t.priority==='high'?' · High priority':''}${dateBit}${sourcePage?' · From: '+(sourcePage.title||'Untitled page'):''}${t.done?' · Done':''}`;
     row.innerHTML = `
       <div class="todo-row">
         <button class="check"></button>
@@ -1427,24 +1439,28 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     dayRow.innerHTML = '<div style="position:sticky;left:0;background:var(--surface);"></div>' + days.map(d=>{
       const isSunday = d.getDay()===0;
       const isMonthStart = d.getDate()===1;
+      const isToday = localDateStr(d)===today;
       const label = d.toLocaleDateString(undefined,{weekday:'short'});
-      return `<div class="gantt-day-cell${isSunday?' sunday':''}${isMonthStart?' month-start':''}"${localDateStr(d)===today?' style="color:var(--accent);font-weight:700;"':''}>${label}<br>${d.getDate()}</div>`;
+      return `<div class="gantt-day-cell${isSunday?' sunday':''}${isMonthStart?' month-start':''}${isToday?' today-col':''}">${label}<br>${d.getDate()}</div>`;
     }).join('');
     inner.appendChild(dayRow);
-    const scheduled = todos.filter(t=>t.start_date);
+    const scheduled = todos.filter(t=>t.start_date).sort((a,b)=> a.start_date.localeCompare(b.start_date) || (a.start_time||'').localeCompare(b.start_time||''));
     if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; setTimeout(()=>{ scrollGanttToToday(); updateGanttMonthLabel(); }, 50); return; }
     scheduled.forEach(t=>{
       const row = document.createElement('div');
       row.className = 'gantt-row';
       row.style.gridTemplateColumns = colTemplate;
       row.style.minWidth = totalWidth+'px';
+      const srcPage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
+      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''}${t.priority==='high'?' · High priority':''}${t.start_time?' · '+fmtTime(t.start_time):''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}`;
       const label = document.createElement('div');
       label.className = 'gantt-label';
       label.style.cursor = 'pointer';
+      label.title = detailTitle;
       label.textContent = t.text + (t.start_time ? ` (${fmtTime(t.start_time)})` : '');
       label.addEventListener('click', ()=>goToTaskContext(t));
       row.appendChild(label);
-      for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'+(days[i].getDay()===0?' sunday':'')+(days[i].getDate()===1?' month-start':''); row.appendChild(c); }
+      for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'+(days[i].getDay()===0?' sunday':'')+(days[i].getDate()===1?' month-start':'')+(localDateStr(days[i])===todayStr()?' today-col':''); row.appendChild(c); }
       const start = new Date(t.start_date+'T00:00:00');
       const end = new Date((t.end_date||t.start_date)+'T00:00:00');
       const viewStart = days[0], viewEnd = days[GANTT_DAYS-1];
@@ -1458,6 +1474,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       bar.style.left = `${130 + startOffset*GANTT_DAY_PX}px`;
       bar.style.width = `${span*GANTT_DAY_PX - 4}px`;
       bar.style.cursor = 'pointer';
+      bar.title = detailTitle;
       bar.textContent = t.text;
       bar.addEventListener('click', ()=>goToTaskContext(t));
       row.style.position = 'relative';
@@ -1566,7 +1583,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       const row = document.createElement('div');
       row.className='cal-todo';
       const timeLabel = t.start_time ? `${fmtTime(t.start_time)}${t.end_time?'–'+fmtTime(t.end_time):''}` : 'All day';
-      row.innerHTML = `<div style="cursor:pointer;"><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'} · ${timeLabel}</div></div><button class="cal-add">Add to calendar</button>`;
+      const srcPage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
+      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''} · ${timeLabel}${t.priority==='high'?' · High priority':''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}`;
+      row.title = detailTitle;
+      row.innerHTML = `<div style="cursor:pointer;"><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'} · ${timeLabel}${srcPage ? ' · 📝 '+(srcPage.title||'Untitled page') : ''}</div></div><button class="cal-add">Add to calendar</button>`;
       row.querySelector('div > div').textContent = t.text;
       row.querySelector('div').addEventListener('click', ()=>goToTaskContext(t));
       row.querySelector('.cal-add').addEventListener('click', (e)=>{ e.stopPropagation(); downloadICS(t); });
@@ -1697,6 +1717,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderNotifBadge();
   });
   $('notifClose').addEventListener('click', ()=>$('notifOverlay').classList.add('hidden'));
+  $('settingsBtn').addEventListener('click', ()=>$('settingsOverlay').classList.remove('hidden'));
+  $('settingsClose').addEventListener('click', ()=>$('settingsOverlay').classList.add('hidden'));
 })();
 </script>
 </body>
