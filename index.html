@@ -11,6 +11,7 @@
   import * as chronoModule from 'https://cdn.jsdelivr.net/npm/chrono-node/+esm';
   window.chrono = chronoModule;
 </script>
+<script src="config.js"></script>
 <style>
   :root{
     --bg:#F6F4EE; --surface:#FFFFFF; --ink:#1D2420; --muted:#6E6A5F;
@@ -276,7 +277,7 @@
 <body>
 
 <div id="setupWarning" class="setup-warning hidden">
-  <strong>Not connected yet.</strong> Open this file and replace <code>SUPABASE_URL</code> and <code>SUPABASE_PUBLISHABLE_KEY</code> near the top of the script with your own project's values from Supabase → Settings → API Keys. Use the <strong>publishable</strong> key only — never the secret key.
+  <strong>Not connected yet.</strong> Open <code>config.js</code> (a separate file alongside this one) and fill in <code>SUPABASE_URL</code> and <code>SUPABASE_PUBLISHABLE_KEY</code> from Supabase → Settings → API Keys. Use the <strong>publishable</strong> key only — never the secret key. Make sure <code>config.js</code> is uploaded to your site next to <code>index.html</code>.
 </div>
 
 <div id="authScreen" class="auth-screen hidden">
@@ -473,15 +474,13 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.9";
+const APP_VERSION = "2026-09-03.10";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
-// ====== CONNECT YOUR SUPABASE PROJECT HERE ======
-const SUPABASE_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MfDYPsXWX9tPFguJDRcTIw_9o3rd47A";
-// Optional: after deploying the ics-feed Edge Function (see supabase/functions/ics-feed),
-// paste its full URL here, e.g. "https://your-ref.functions.supabase.co/ics-feed?key=yoursecret"
-const ICS_FEED_URL = "https://jhkyptpidnoxhsyvxeev.supabase.co/functions/v1/ics-feed?key=17p3paa8pmv9pztgp8";
-// =================================================
+// Connection settings now live in config.js (a separate file) so they survive
+// every future index.html update — see that file to set them up.
+const SUPABASE_URL = window.BCJR_CONFIG?.SUPABASE_URL || "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = window.BCJR_CONFIG?.SUPABASE_PUBLISHABLE_KEY || "YOUR-PUBLISHABLE-KEY";
+const ICS_FEED_URL = window.BCJR_CONFIG?.ICS_FEED_URL || "";
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT");
 if(!isConfigured) document.getElementById('setupWarning').classList.remove('hidden');
