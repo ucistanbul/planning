@@ -328,7 +328,7 @@
               <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
               <button data-cmd="insertOrderedList" title="Numbered list">1.≡</button>
               <button data-cmd="link" title="Add link">🔗</button>
-              <span style="font-size:10px;color:var(--muted);align-self:center;margin-left:4px;">Cmd/Ctrl+click a link to open it</span>
+              <span style="font-size:10px;color:var(--muted);align-self:center;margin-left:4px;">Cmd/Ctrl+click a link to open it · Cmd/Ctrl+; inserts today's date/time</span>
               <button data-cmd="task" title="Insert task">☐ Task</button>
             </div>
             <div class="page-body" id="pageBody" contenteditable="true"></div>
@@ -370,6 +370,7 @@
       <div class="sched-toggle">
         <button class="btn-ghost on" id="showGanttBtn">Timeline</button>
         <button class="btn-ghost" id="showCalBtn">Month</button>
+        <button class="btn-ghost" id="addApptBtn" style="margin-left:auto;">📅 Add appointment</button>
       </div>
       <div id="ganttView">
         <div class="gantt-head">
@@ -419,6 +420,29 @@
     <p>Shown next to your edits so teammates know who wrote what.</p>
     <input type="text" id="nameInput" placeholder="e.g. Sam">
     <button id="nameSaveBtn">Continue</button>
+  </div>
+</div>
+
+<div class="modal-back hidden" id="apptModal">
+  <div class="modal">
+    <h3>Add appointment</h3>
+    <p>Downloads a calendar file for Google/Apple Calendar, and adds matching tasks here so you can track it too.</p>
+    <input type="text" id="apptTitle" placeholder="Title (e.g. Membership Class)">
+    <input type="text" id="apptLocation" placeholder="Location (optional)">
+    <input type="date" id="apptDate" title="Date of the first occurrence">
+    <div style="display:flex;gap:8px;">
+      <input type="time" id="apptStartTime" style="flex:1;" title="Start time">
+      <input type="time" id="apptEndTime" style="flex:1;" title="End time">
+    </div>
+    <select id="apptRepeat">
+      <option value="none">One time only</option>
+      <option value="weekly" selected>Repeats weekly</option>
+      <option value="daily">Repeats daily</option>
+      <option value="monthly">Repeats monthly</option>
+    </select>
+    <input type="number" id="apptCount" min="1" max="52" value="4" placeholder="Number of occurrences" title="Number of occurrences">
+    <button id="apptCreateBtn">Create &amp; download calendar file</button>
+    <button id="apptCancelBtn" style="background:none;color:var(--muted);box-shadow:none;">Cancel</button>
   </div>
 </div>
 
@@ -474,7 +498,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-03.10";
+const APP_VERSION = "2026-09-07.1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
 // every future index.html update — see that file to set them up.
@@ -531,6 +555,14 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(s<3600) return Math.floor(s/60)+'m ago';
     if(s<86400) return Math.floor(s/3600)+'h ago';
     return Math.floor(s/86400)+'d ago';
+  }
+  function fmtTimestamp(iso){
+    const d = new Date(iso);
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleString(undefined, {
+      month:'short', day:'numeric', year: sameYear ? undefined : 'numeric',
+      hour:'numeric', minute:'2-digit'
+    });
   }
   function fmtTime(t){ if(!t) return ''; const [h,m]=t.split(':').map(Number); const hr12=((h+11)%12)+1; return `${hr12}:${pad(m)} ${h<12?'AM':'PM'}`; }
   function fmtDateShort(dstr){ return new Date(dstr+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
@@ -652,13 +684,34 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const list = $('latestList');
     list.innerHTML = '';
     if(items.length===0){ list.innerHTML = '<div class="empty">Nothing yet — add a task or page to get started.</div>'; return; }
-    items.slice(0,40).forEach(it=>{
-      const row = document.createElement('div');
-      row.className = 'feed-item';
-      row.innerHTML = `<div class="feed-icon ${it.type}">${it.icon}</div><div class="feed-body"><div class="txt"></div><div class="meta">${it.who?it.who+' · ':''}${timeAgo(it.ts)}</div></div>`;
-      row.querySelector('.txt').textContent = it.txt;
-      row.addEventListener('click', it.go);
-      list.appendChild(row);
+
+    const now = Date.now();
+    const DAY = 86400000;
+    const groups = [
+      { label:'Recent', items:[] },
+      { label:'Last Week', items:[] },
+      { label:'Earlier', items:[] }
+    ];
+    items.slice(0,80).forEach(it=>{
+      const ageDays = (now - new Date(it.ts).getTime()) / DAY;
+      if(ageDays <= 3) groups[0].items.push(it);
+      else if(ageDays <= 7) groups[1].items.push(it);
+      else groups[2].items.push(it);
+    });
+    groups.forEach(g=>{
+      if(g.items.length===0) return;
+      const header = document.createElement('div');
+      header.className = 'group-label';
+      header.textContent = g.label;
+      list.appendChild(header);
+      g.items.forEach(it=>{
+        const row = document.createElement('div');
+        row.className = 'feed-item';
+        row.innerHTML = `<div class="feed-icon ${it.type}">${it.icon}</div><div class="feed-body"><div class="txt"></div><div class="meta">${it.who?it.who+' · ':''}${fmtTimestamp(it.ts)}</div></div>`;
+        row.querySelector('.txt').textContent = it.txt;
+        row.addEventListener('click', it.go);
+        list.appendChild(row);
+      });
     });
   }
 
@@ -872,6 +925,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); insertLinkAtSelection(); return; }
+    if(mod && e.key===';'){
+      e.preventDefault();
+      const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
+      document.execCommand('insertText', false, stamp);
+      savePage();
+      return;
+    }
     if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
@@ -1091,6 +1151,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     await sb.from('todo_lists').insert({ project_id: projectId, name: name.trim(), position: todoLists.length });
   });
 
+  function addInterval(dateStr, freq, n){
+    const d = new Date(dateStr+'T00:00:00');
+    if(freq==='daily') d.setDate(d.getDate()+n);
+    else if(freq==='weekly') d.setDate(d.getDate()+7*n);
+    else if(freq==='monthly') d.setMonth(d.getMonth()+n);
+    return localDateStr(d);
+  }
   async function addTaskFromRow(block, listId){
     const text = block.querySelector('.task-text').value.trim();
     if(!text) return;
@@ -1104,18 +1171,40 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     }
     if(start && !end) end = start;
     const endTime = block.querySelector('.task-end-time').value || null;
-    await sb.from('todos').insert({
-      project_id: projectId, list_id: listId, text,
-      assignee: block.querySelector('.task-assignee').value.trim() || null,
-      start_date: start, end_date: end, start_time: startTime, end_time: endTime,
-      priority: block.querySelector('.task-priority').value, done: false
-    });
+    const assignee = block.querySelector('.task-assignee').value.trim() || null;
+    const priority = block.querySelector('.task-priority').value;
+    const repeatFreq = block.querySelector('.task-repeat').value;
+    const repeatCount = Math.max(1, Math.min(52, parseInt(block.querySelector('.task-repeat-count').value, 10) || 1));
+
+    if(repeatFreq === 'none'){
+      await sb.from('todos').insert({
+        project_id: projectId, list_id: listId, text, assignee,
+        start_date: start, end_date: end, start_time: startTime, end_time: endTime,
+        priority, done: false
+      });
+    } else {
+      // A recurring task with no anchor date doesn't mean anything — default to today.
+      const anchor = start || todayStr();
+      const groupId = crypto.randomUUID();
+      const rows = [];
+      for(let i=0; i<repeatCount; i++){
+        const occStart = addInterval(anchor, repeatFreq, i);
+        const occEnd = end ? addInterval(end, repeatFreq, i) : occStart;
+        rows.push({
+          project_id: projectId, list_id: listId, text, assignee,
+          start_date: occStart, end_date: occEnd, start_time: startTime, end_time: endTime,
+          priority, done: false, recurrence_group_id: groupId
+        });
+      }
+      await sb.from('todos').insert(rows);
+    }
     block.querySelector('.task-text').value = '';
     block.querySelector('.task-assignee').value = '';
     block.querySelector('.task-start').value = '';
     block.querySelector('.task-end').value = '';
     block.querySelector('.task-start-time').value = '';
     block.querySelector('.task-end-time').value = '';
+    block.querySelector('.task-repeat').value = 'none';
     block.querySelector('.task-text').focus();
   }
 
@@ -1215,6 +1304,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           <input type="date" class="task-end" title="End date">
           <input type="time" class="task-end-time" title="End time (optional)">
           <select class="task-priority"><option value="normal">Normal</option><option value="high">High</option></select>
+          <select class="task-repeat" title="Repeat">
+            <option value="none">Doesn't repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+          <input type="number" class="task-repeat-count" min="1" max="52" value="4" title="Number of occurrences" style="width:60px;">
           <button class="btn task-add">Add</button>
         </div>`;
       block.querySelector('.name').textContent = g.list.name;
@@ -1613,6 +1709,67 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
+
+  // ---------- Recurring appointment → downloadable .ics with a real RRULE ----------
+  // A single VEVENT with RRULE is what makes Google/Apple Calendar treat this as
+  // ONE recurring series (editable/deletable as a whole), not N separate events.
+  function downloadRecurringICS({title, location, date, startTime, endTime, freq, count}){
+    const dtStart = date.replace(/-/g,'') + 'T' + startTime.replace(':','') + '00';
+    const dtEnd = date.replace(/-/g,'') + 'T' + endTime.replace(':','') + '00';
+    const nowStamp = new Date().toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
+    const freqMap = { daily:'DAILY', weekly:'WEEKLY', monthly:'MONTHLY' };
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Basecamp Jr//EN','BEGIN:VEVENT',
+      `UID:${crypto.randomUUID()}@basecampjr`,
+      `DTSTAMP:${nowStamp}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`
+    ];
+    if(freq !== 'none') lines.push(`RRULE:FREQ=${freqMap[freq]};COUNT=${count}`);
+    lines.push(`SUMMARY:${(title||'Appointment').replace(/\n/g,' ')}`);
+    if(location) lines.push(`LOCATION:${location.replace(/\n/g,' ')}`);
+    lines.push('END:VEVENT','END:VCALENDAR');
+    const blob = new Blob([lines.join('\r\n')], {type:'text/calendar'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (title||'appointment').slice(0,30).replace(/[^a-z0-9]/gi,'_') + '.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  $('addApptBtn').addEventListener('click', ()=>{
+    $('apptTitle').value = ''; $('apptLocation').value = '';
+    $('apptDate').value = todayStr(); $('apptStartTime').value = ''; $('apptEndTime').value = '';
+    $('apptRepeat').value = 'weekly'; $('apptCount').value = '4';
+    $('apptModal').classList.remove('hidden');
+    $('apptTitle').focus();
+  });
+  $('apptCancelBtn').addEventListener('click', ()=>$('apptModal').classList.add('hidden'));
+  $('apptCreateBtn').addEventListener('click', async ()=>{
+    const title = $('apptTitle').value.trim();
+    const location = $('apptLocation').value.trim();
+    const date = $('apptDate').value;
+    const startTime = $('apptStartTime').value;
+    const endTime = $('apptEndTime').value;
+    const freq = $('apptRepeat').value;
+    const count = Math.max(1, Math.min(52, parseInt($('apptCount').value, 10) || 1));
+    if(!title || !date || !startTime || !endTime){ alert('Please fill in the title, date, and start/end time.'); return; }
+
+    downloadRecurringICS({title, location, date, startTime, endTime, freq, count});
+
+    // Also create matching tasks here so it shows up in Schedule/Latest/Tasks.
+    const occurrences = freq === 'none' ? 1 : count;
+    const groupId = crypto.randomUUID();
+    const rows = [];
+    for(let i=0; i<occurrences; i++){
+      const occDate = freq === 'none' ? date : addInterval(date, freq, i);
+      rows.push({
+        project_id: projectId, text: location ? `${title} (${location})` : title,
+        start_date: occDate, end_date: occDate, start_time: startTime, end_time: endTime,
+        priority: 'normal', done: false, recurrence_group_id: occurrences>1 ? groupId : null
+      });
+    }
+    await sb.from('todos').insert(rows);
+    $('apptModal').classList.add('hidden');
+  });
 
   // ================= SEARCH =================
   $('searchBtn').addEventListener('click', ()=>{
