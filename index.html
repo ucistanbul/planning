@@ -107,8 +107,9 @@
   /* --- Page detail --- */
   .page-detail-layout{display:flex;flex-direction:column;gap:18px;}
   .page-title-input{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;border:none;background:none;width:100%;outline:none;margin-bottom:8px;}
-  .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;}
+  .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
   .page-toolbar button{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 8px;font-size:12px;cursor:pointer;font-family:inherit;}
+  .toolbar-sep{width:1px;height:18px;background:var(--border);margin:0 2px;}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
@@ -325,11 +326,13 @@
               <button data-cmd="bold" title="Bold (Cmd+B)"><b>B</b></button>
               <button data-cmd="italic" title="Italic (Cmd+I)"><i>i</i></button>
               <button data-cmd="underline" title="Underline (Cmd+U)"><u>U</u></button>
-              <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
-              <button data-cmd="insertOrderedList" title="Numbered list">1.≡</button>
-              <button data-cmd="link" title="Add link">🔗</button>
-              <span style="font-size:10px;color:var(--muted);align-self:center;margin-left:4px;">Cmd/Ctrl+click a link to open it · Cmd/Ctrl+; inserts today's date/time</span>
-              <button data-cmd="task" title="Insert task">☐ Task</button>
+              <span class="toolbar-sep"></span>
+              <button data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+              <button data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+              <span class="toolbar-sep"></span>
+              <button data-cmd="link" title="Add a hyperlink (Cmd+K). Cmd/Ctrl+click a link to open it.">🔗 Link</button>
+              <button data-cmd="task" title="Turn selected text into a task">☐ Task</button>
+              <button data-cmd="timestamp" title="Insert today's date and time (Cmd/Ctrl+;)">🕐 Date/Time</button>
             </div>
             <div class="page-body" id="pageBody" contenteditable="true"></div>
           </div>
@@ -423,10 +426,27 @@
   </div>
 </div>
 
+<div class="modal-back hidden" id="pageTaskModal">
+  <div class="modal">
+    <h3>Create task</h3>
+    <input type="text" id="pageTaskText" placeholder="Task text">
+    <input type="date" id="pageTaskDate" title="Start date (optional)">
+    <select id="pageTaskRepeat">
+      <option value="none" selected>Doesn't repeat</option>
+      <option value="daily">Repeats daily</option>
+      <option value="weekly">Repeats weekly</option>
+      <option value="monthly">Repeats monthly</option>
+    </select>
+    <input type="number" id="pageTaskRepeatCount" min="1" max="52" value="4" placeholder="Number of occurrences" title="Number of occurrences">
+    <button id="pageTaskCreateBtn">Create task</button>
+    <button id="pageTaskCancelBtn" style="background:none;color:var(--muted);box-shadow:none;">Cancel</button>
+  </div>
+</div>
+
 <div class="modal-back hidden" id="apptModal">
   <div class="modal">
     <h3>Add appointment</h3>
-    <p>Downloads a calendar file for Google/Apple Calendar, and adds matching tasks here so you can track it too.</p>
+    <p>Downloads a calendar file, and adds matching tasks here so you can track it too.</p>
     <input type="text" id="apptTitle" placeholder="Title (e.g. Membership Class)">
     <input type="text" id="apptLocation" placeholder="Location (optional)">
     <input type="date" id="apptDate" title="Date of the first occurrence">
@@ -443,6 +463,13 @@
     <input type="number" id="apptCount" min="1" max="52" value="4" placeholder="Number of occurrences" title="Number of occurrences">
     <button id="apptCreateBtn">Create &amp; download calendar file</button>
     <button id="apptCancelBtn" style="background:none;color:var(--muted);box-shadow:none;">Cancel</button>
+    <div id="apptDone" class="hidden" style="margin-top:14px;padding:12px;background:var(--accent-soft);border-radius:8px;font-size:12px;line-height:1.6;color:var(--ink);">
+      <strong>File downloaded ✓ — to add it to Google Calendar:</strong><br>
+      1. Go to <strong>calendar.google.com</strong> on a computer (import isn't available in the mobile app)<br>
+      2. Click the <strong>⚙️ gear icon</strong> → <strong>Settings</strong><br>
+      3. In the left sidebar, click <strong>Import &amp; export</strong><br>
+      4. Click <strong>Select file from your computer</strong>, choose the file that just downloaded, then click <strong>Import</strong>
+    </div>
   </div>
 </div>
 
@@ -498,7 +525,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.1";
+const APP_VERSION = "2026-09-07.2";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
 // every future index.html update — see that file to set them up.
@@ -910,6 +937,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('keyup', e=>{
     if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
   });
+  function insertTimestamp(){
+    pageBodyEl.focus();
+    const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
+    document.execCommand('insertText', false, stamp);
+    savePage();
+  }
   function insertLinkAtSelection(){
     pageBodyEl.focus();
     toolbarPromptOpen = true;
@@ -925,13 +958,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
     if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); insertLinkAtSelection(); return; }
-    if(mod && e.key===';'){
-      e.preventDefault();
-      const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
-      document.execCommand('insertText', false, stamp);
-      savePage();
-      return;
-    }
+    if(mod && e.key===';'){ e.preventDefault(); insertTimestamp(); return; }
     if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
     if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
   });
@@ -1035,6 +1062,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     sel.addRange(newRange);
   }
 
+  let pendingTaskRange = null;
   $('pageToolbar').querySelectorAll('button').forEach(btn=>{
     btn.addEventListener('mousedown', e=>e.preventDefault());
     btn.addEventListener('click', async ()=>{
@@ -1049,40 +1077,93 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           savedRange = sel.getRangeAt(0).cloneRange();
           defaultText = sel.toString();
         }
+        pendingTaskRange = savedRange;
+        $('pageTaskText').value = defaultText;
+        const foundDate = extractDateFromText(defaultText);
+        $('pageTaskDate').value = foundDate || '';
+        $('pageTaskRepeat').value = 'none';
+        $('pageTaskRepeatCount').value = '4';
         toolbarPromptOpen = true;
-        const text = prompt('Task text', defaultText);
-        toolbarPromptOpen = false;
-        if(!text || !text.trim()) return;
-        pageBodyEl.focus();
-        if(savedRange){ sel.removeAllRanges(); sel.addRange(savedRange); }
-        const taskId = crypto.randomUUID();
-        const linkHtml = `&nbsp;<a class="task-link" contenteditable="false" data-task-id="${taskId}" title="Click to view in Tasks">${escapeHtml(text.trim())}</a>&nbsp;`;
-        document.execCommand('insertHTML', false, linkHtml); // synchronous, replaces the restored selection immediately
-        // execCommand leaves the cursor after ALL inserted content (including
-        // the trailing padding space), not right after the link — force it
-        // explicitly so an immediate Backspace targets the link, not the space.
-        const insertedLink = pageBodyEl.querySelector(`.task-link[data-task-id="${taskId}"]`);
-        if(insertedLink){
-          const r = document.createRange();
-          r.setStartAfter(insertedLink);
-          r.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(r);
-        }
+        $('pageTaskModal').classList.remove('hidden');
+        $('pageTaskText').focus();
+      } else if(cmd==='insertUnorderedList' || cmd==='insertOrderedList'){
+        // Route through the same list-building logic as typing "* "/"1. " —
+        // raw execCommand here had the old cursor-jumps-to-next-line bug.
+        const marker = cmd==='insertUnorderedList' ? '* ' : '1. ';
+        document.execCommand('insertText', false, marker);
+        autoFormatList(pageBodyEl);
         savePage();
-        renderPageTasksList();
-        const found = extractDateTimeFromText(text.trim());
-        sb.from('todos').insert({
-          id: taskId, project_id: projectId, page_id: selectedPageId, text: text.trim(), done:false, priority:'normal',
-          start_date: found.date, end_date: found.date, start_time: found.time
-        }).then(({error})=>{
-          if(error) console.error('task insert failed', error);
-        });
+      } else if(cmd==='timestamp'){
+        insertTimestamp();
       } else {
         document.execCommand(cmd, false, null);
         savePage();
       }
     });
+  });
+
+  $('pageTaskCancelBtn').addEventListener('click', ()=>{
+    toolbarPromptOpen = false;
+    pendingTaskRange = null;
+    $('pageTaskModal').classList.add('hidden');
+  });
+  $('pageTaskCreateBtn').addEventListener('click', async ()=>{
+    const text = $('pageTaskText').value.trim();
+    if(!text) return;
+    const startDate = $('pageTaskDate').value || null;
+    const repeatFreq = $('pageTaskRepeat').value;
+    const repeatCount = Math.max(1, Math.min(52, parseInt($('pageTaskRepeatCount').value, 10) || 1));
+    toolbarPromptOpen = false;
+    $('pageTaskModal').classList.add('hidden');
+
+    pageBodyEl.focus();
+    const sel = window.getSelection();
+    if(pendingTaskRange){ sel.removeAllRanges(); sel.addRange(pendingTaskRange); }
+    const taskId = crypto.randomUUID();
+    const linkHtml = `&nbsp;<a class="task-link" contenteditable="false" data-task-id="${taskId}" title="Click to view in Tasks">${escapeHtml(text)}</a>&nbsp;`;
+    document.execCommand('insertHTML', false, linkHtml);
+    const insertedLink = pageBodyEl.querySelector(`.task-link[data-task-id="${taskId}"]`);
+    if(insertedLink){
+      const r = document.createRange();
+      r.setStartAfter(insertedLink);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    savePage();
+    renderPageTasksList();
+    pendingTaskRange = null;
+
+    const found = extractDateTimeFromText(text);
+    const anchor = startDate || found.date || null;
+
+    if(repeatFreq === 'none' || repeatCount <= 1){
+      // The single, in-page-linked task — this is the one the marker points to.
+      await sb.from('todos').insert({
+        id: taskId, project_id: projectId, page_id: selectedPageId, text,
+        done:false, priority:'normal',
+        start_date: anchor, end_date: anchor, start_time: found.time
+      });
+    } else {
+      // The first occurrence is the one linked from the page (same taskId the
+      // marker points to); the rest are additional dated occurrences that show
+      // up in Tasks/Schedule but aren't individually marked in the page text.
+      const base = anchor || todayStr();
+      const groupId = crypto.randomUUID();
+      const rows = [{
+        id: taskId, project_id: projectId, page_id: selectedPageId, text,
+        done:false, priority:'normal',
+        start_date: base, end_date: base, start_time: found.time, recurrence_group_id: groupId
+      }];
+      for(let i=1; i<repeatCount; i++){
+        const occDate = addInterval(base, repeatFreq, i);
+        rows.push({
+          project_id: projectId, text, done:false, priority:'normal',
+          start_date: occDate, end_date: occDate, start_time: found.time, recurrence_group_id: groupId
+        });
+      }
+      await sb.from('todos').insert(rows);
+    }
   });
 
   function renderPageTasksList(){
@@ -1739,6 +1820,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('apptTitle').value = ''; $('apptLocation').value = '';
     $('apptDate').value = todayStr(); $('apptStartTime').value = ''; $('apptEndTime').value = '';
     $('apptRepeat').value = 'weekly'; $('apptCount').value = '4';
+    $('apptDone').classList.add('hidden');
     $('apptModal').classList.remove('hidden');
     $('apptTitle').focus();
   });
@@ -1751,7 +1833,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const endTime = $('apptEndTime').value;
     const freq = $('apptRepeat').value;
     const count = Math.max(1, Math.min(52, parseInt($('apptCount').value, 10) || 1));
-    if(!title || !date || !startTime || !endTime){ alert('Please fill in the title, date, and start/end time.'); return; }
+    const missing = [];
+    if(!title) missing.push('Title');
+    if(!date) missing.push('Date');
+    if(!startTime) missing.push('Start time');
+    if(!endTime) missing.push('End time');
+    if(missing.length){ alert('Missing: ' + missing.join(', ') + '.\n\nIf you did fill this in, try clicking directly into the date/time boxes and re-entering it — some browsers (especially Safari) need the field fully completed before it counts.'); return; }
 
     downloadRecurringICS({title, location, date, startTime, endTime, freq, count});
 
@@ -1768,7 +1855,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       });
     }
     await sb.from('todos').insert(rows);
-    $('apptModal').classList.add('hidden');
+    $('apptDone').classList.remove('hidden');
   });
 
   // ================= SEARCH =================
