@@ -61,21 +61,23 @@
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
   .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:112px;}
+  .sidebar-nav{display:none;}
+  .main-column{display:flex;flex-direction:column;min-width:0;flex:1;}
   header{padding:20px 16px 12px;display:flex;align-items:center;justify-content:space-between;}
   .today-strip{margin:0 16px 14px;padding:10px 14px;background:var(--accent-soft);border-radius:8px;display:flex;align-items:center;gap:9px;font-family:'Manrope',sans-serif;font-size:15px;font-weight:700;color:var(--accent);}
   .today-strip::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
-  header .brand{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  header .brand{font-family:'Manrope',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.02em;}
   header .icons{display:flex;gap:8px;align-items:center;}
   header .icon-btn{position:relative;font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:5px;}
   header .icon-btn .badge{position:absolute;top:-2px;right:-2px;background:var(--danger);color:#fff;font-size:9px;border-radius:20px;min-width:14px;height:14px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
   main{flex:1;padding:0 16px 24px;}
   section{display:none;}
   section.active{display:block;}
-  h2.section-title{font-family:'Manrope',sans-serif;font-size:17px;font-weight:500;margin:4px 0 12px;display:flex;align-items:center;justify-content:space-between;}
+  h2.section-title{font-family:'Manrope',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.015em;margin:4px 0 14px;display:flex;align-items:center;justify-content:space-between;}
   h2.section-title .sub{color:var(--muted);font-weight:400;font-size:12px;}
   .empty{color:var(--muted);font-size:14px;padding:22px 4px;text-align:center;}
 
-  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.08);}
   .btn-ghost{background:none;border:1px solid var(--border);color:var(--ink);border-radius:8px;padding:8px 11px;font-family:inherit;font-size:12px;cursor:pointer;}
   .btn-ghost.on{background:var(--accent);color:#fff;border-color:var(--accent);}
   .btn-sm{background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 9px;font-family:inherit;font-size:11px;cursor:pointer;}
@@ -95,7 +97,7 @@
 
   /* --- Pages list --- */
   #pagesList{display:flex;flex-direction:column;gap:12px;}
-  .page-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--page);border-radius:var(--radius);padding:16px 18px;cursor:pointer;transition:border-color .15s;}
+  .page-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--page);border-radius:var(--radius);padding:16px 18px;cursor:pointer;transition:border-color .15s, box-shadow .15s;box-shadow:0 1px 2px rgba(0,0,0,0.03);}
   .page-card:hover{border-color:var(--page);}
   .page-card-title{font-family:'Manrope',sans-serif;font-weight:700;font-size:17px;color:var(--ink);margin-bottom:6px;}
   .page-card-preview{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -164,6 +166,7 @@
   .task-edit-form .row{display:flex;gap:6px;flex-wrap:wrap;}
   .task-edit-form input, .task-edit-form select{border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:12px;flex:1;min-width:80px;}
   .task-edit-actions{display:flex;gap:6px;margin-top:2px;}
+  .recur-info{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);background:var(--bg);border-radius:6px;padding:6px 8px;flex-wrap:wrap;}
   .task-comments{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
   .task-comments .tc-item{background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:6px;}
   .task-comments .tc-who{font-size:11px;font-weight:600;color:var(--comment);}
@@ -258,11 +261,32 @@
   .auth-status{font-size:12px;color:var(--muted);margin-top:10px;text-align:center;}
 
   @media (min-width: 900px){
-    .app{max-width:1100px;padding-bottom:40px;}
-    main{padding:0 32px 32px;}
-    header{padding:24px 32px 16px;}
-    .today-strip{margin:0 32px 16px;}
-    nav.tabs{max-width:1100px;}
+    body{background:var(--bg);}
+    .app{max-width:1240px;padding-bottom:0;flex-direction:row;align-items:stretch;min-height:100vh;}
+    .sidebar-nav{
+      display:flex;flex-direction:column;width:232px;flex-shrink:0;
+      padding:28px 16px;border-right:1px solid var(--border);
+      position:sticky;top:0;height:100vh;
+    }
+    .sidebar-brand{font-family:'Manrope',sans-serif;font-weight:800;font-size:22px;letter-spacing:-0.02em;color:var(--ink);padding:0 12px;margin-bottom:28px;}
+    .sidebar-brand .accent-dot{color:var(--accent);}
+    .sidebar-tabs{display:flex;flex-direction:column;gap:2px;}
+    .sidebar-tabs button{
+      display:flex;align-items:center;gap:11px;text-align:left;
+      border:none;background:none;border-left:3px solid transparent;
+      padding:10px 12px;border-radius:0 8px 8px 0;font-family:inherit;font-size:14px;font-weight:500;
+      color:var(--muted);cursor:pointer;
+    }
+    .sidebar-tabs button .tab-icon{font-size:16px;width:20px;text-align:center;}
+    .sidebar-tabs button:hover{background:var(--bg);color:var(--ink);}
+    .sidebar-tabs button.active{background:var(--accent-soft);border-left-color:var(--accent);color:var(--accent);font-weight:700;}
+    .sidebar-footer{margin-top:auto;padding:0 12px;font-size:11px;color:var(--muted);}
+    .main-column{flex:1;min-width:0;max-width:1000px;}
+    nav.tabs{display:none;}
+    header .brand{display:none;}
+    header{padding:20px 40px 12px;}
+    .today-strip{margin:0 40px 20px;font-size:16px;padding:12px 16px;}
+    main{padding:0 40px 40px;}
     .gantt-wrap{overflow-x:auto;}
     .month-day-layout{flex-direction:row;align-items:flex-start;}
     .month-pane{flex:0 0 33%;max-width:340px;}
@@ -272,6 +296,9 @@
     .page-side{width:320px;flex-shrink:0;}
     #pagesList{display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;}
     .page-card-preview{-webkit-line-clamp:3;}
+    .section-title{font-size:26px;letter-spacing:-0.02em;}
+    .page-card, .theme-card{box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+    .page-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.07);transform:translateY(-1px);transition:box-shadow .15s, transform .15s, border-color .15s;}
   }
 </style>
 </head>
@@ -292,6 +319,20 @@
 </div>
 
 <div class="app hidden" id="appRoot">
+  <aside class="sidebar-nav">
+    <div class="sidebar-brand">Basecamp<span class="accent-dot">.</span></div>
+    <nav class="sidebar-tabs">
+      <button data-tab="latest" class="nav-tab-btn active"><span class="tab-icon">⚡</span><span>Latest</span></button>
+      <button data-tab="notes" class="nav-tab-btn"><span class="tab-icon">📝</span><span>Pages</span></button>
+      <button data-tab="todos" class="nav-tab-btn"><span class="tab-icon">✓</span><span>Tasks</span></button>
+      <button data-tab="sched" class="nav-tab-btn"><span class="tab-icon">▦</span><span>Schedule</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="versionTagSidebar"></span>
+    </div>
+  </aside>
+
+  <div class="main-column">
   <header>
     <div class="brand">Basecamp&nbsp;Jr. <span id="versionTag" style="font-family:'Inter',sans-serif;font-size:10px;font-weight:400;color:var(--muted);vertical-align:middle;"></span></div>
     <div class="icons">
@@ -332,7 +373,7 @@
               <span class="toolbar-sep"></span>
               <button data-cmd="link" title="Add a hyperlink (Cmd+K). Cmd/Ctrl+click a link to open it.">🔗 Link</button>
               <button data-cmd="task" title="Turn selected text into a task">☐ Task</button>
-              <button data-cmd="timestamp" title="Insert today's date and time (Cmd/Ctrl+;)">🕐 Date/Time</button>
+              <button data-cmd="timestamp" title="Insert today's date and time. Or just type @now followed by a space, anywhere.">🕐 Date/Time</button>
             </div>
             <div class="page-body" id="pageBody" contenteditable="true"></div>
           </div>
@@ -408,12 +449,13 @@
 
     </section>
   </main>
+  </div>
 
   <nav class="tabs">
-    <button data-tab="latest" class="active"><span class="tab-icon">⚡</span><span class="tab-label">Latest</span></button>
-    <button data-tab="notes"><span class="tab-icon">📝</span><span class="tab-label">Pages</span></button>
-    <button data-tab="todos"><span class="tab-icon">✓</span><span class="tab-label">Tasks</span></button>
-    <button data-tab="sched"><span class="tab-icon">▦</span><span class="tab-label">Schedule</span></button>
+    <button data-tab="latest" class="nav-tab-btn active"><span class="tab-icon">⚡</span><span class="tab-label">Latest</span></button>
+    <button data-tab="notes" class="nav-tab-btn"><span class="tab-icon">📝</span><span class="tab-label">Pages</span></button>
+    <button data-tab="todos" class="nav-tab-btn"><span class="tab-icon">✓</span><span class="tab-label">Tasks</span></button>
+    <button data-tab="sched" class="nav-tab-btn"><span class="tab-icon">▦</span><span class="tab-label">Schedule</span></button>
   </nav>
 </div>
 
@@ -435,8 +477,10 @@
       <option value="none" selected>Doesn't repeat</option>
       <option value="daily">Repeats daily</option>
       <option value="weekly">Repeats weekly</option>
-      <option value="monthly">Repeats monthly</option>
+      <option value="monthly_date">Repeats monthly (same date)</option>
+      <option value="monthly_weekday">Repeats monthly (same weekday, e.g. 1st Thursday)</option>
     </select>
+    <div id="pageTaskRepeatDesc" style="font-size:12px;color:var(--muted);margin:-6px 0 6px;"></div>
     <input type="number" id="pageTaskRepeatCount" min="1" max="52" value="4" placeholder="Number of occurrences" title="Number of occurrences">
     <button id="pageTaskCreateBtn">Create task</button>
     <button id="pageTaskCancelBtn" style="background:none;color:var(--muted);box-shadow:none;">Cancel</button>
@@ -458,8 +502,10 @@
       <option value="none">One time only</option>
       <option value="weekly" selected>Repeats weekly</option>
       <option value="daily">Repeats daily</option>
-      <option value="monthly">Repeats monthly</option>
+      <option value="monthly_date">Repeats monthly (same date)</option>
+      <option value="monthly_weekday">Repeats monthly (same weekday, e.g. 1st Thursday)</option>
     </select>
+    <div id="apptRepeatDesc" style="font-size:12px;color:var(--muted);margin:-6px 0 6px;"></div>
     <input type="number" id="apptCount" min="1" max="52" value="4" placeholder="Number of occurrences" title="Number of occurrences">
     <button id="apptCreateBtn">Create &amp; download calendar file</button>
     <button id="apptCancelBtn" style="background:none;color:var(--muted);box-shadow:none;">Cancel</button>
@@ -525,8 +571,9 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.2";
-{ const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION; }
+const APP_VERSION = "2026-09-07.4";
+{ const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
+  const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
 // every future index.html update — see that file to set them up.
 const SUPABASE_URL = window.BCJR_CONFIG?.SUPABASE_URL || "https://YOUR-PROJECT.supabase.co";
@@ -629,13 +676,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(row) row.textContent = 'Today: ' + new Date().toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric', year:'numeric'});
   }
   function activateTab(name){
-    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+    document.querySelectorAll('.nav-tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
     document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
     $('tab-'+name).classList.add('active');
     renderGlobalToday();
     if(name==='sched'){ renderGantt(); renderScheduleMonth(); }
   }
-  document.querySelectorAll('nav.tabs button').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
+  document.querySelectorAll('.nav-tab-btn').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
   function flashAndScroll(elId){
     setTimeout(()=>{
       const el = document.getElementById(elId);
@@ -913,6 +960,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('click', (e)=>{
     const link = e.target.closest('a.task-link');
     if(link && link.dataset.taskId){
+      editingTaskId = link.dataset.taskId;
+      renderPageTasksList();
       flashAndScroll('side-todo-'+link.dataset.taskId);
       // A click on an atomic element can leave the cursor ambiguously on
       // either side of it — force a known position right after, so a
@@ -933,7 +982,23 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   });
   pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
   pageBodyEl.addEventListener('blur', ()=>{ pageBodyFocused = false; });
-  pageBodyEl.addEventListener('input', ()=>{ autoFormatList(pageBodyEl); savePage(); syncMarkerDeletions(); });
+  function checkTimestampTrigger(){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return;
+    const node = sel.anchorNode;
+    if(!node || node.nodeType !== 3) return;
+    const offset = sel.anchorOffset;
+    const textBefore = node.textContent.slice(0, offset);
+    if(/@now[\u0020\u00A0]$/i.test(textBefore)){
+      const r = document.createRange();
+      r.setStart(node, offset-5);
+      r.setEnd(node, offset-1); // delete just "@now", leave the trailing space in place
+      r.deleteContents();
+      const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
+      document.execCommand('insertText', false, stamp);
+    }
+  }
+  pageBodyEl.addEventListener('input', ()=>{ autoFormatList(pageBodyEl); checkTimestampTrigger(); savePage(); syncMarkerDeletions(); });
   pageBodyEl.addEventListener('keyup', e=>{
     if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
   });
@@ -1083,6 +1148,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         $('pageTaskDate').value = foundDate || '';
         $('pageTaskRepeat').value = 'none';
         $('pageTaskRepeatCount').value = '4';
+        updatePageTaskRepeatDesc();
         toolbarPromptOpen = true;
         $('pageTaskModal').classList.remove('hidden');
         $('pageTaskText').focus();
@@ -1102,6 +1168,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     });
   });
 
+  function updatePageTaskRepeatDesc(){
+    const freq = $('pageTaskRepeat').value;
+    const date = $('pageTaskDate').value || todayStr();
+    $('pageTaskRepeatDesc').textContent = describeRecurrence(freq, date);
+  }
+  $('pageTaskRepeat').addEventListener('change', updatePageTaskRepeatDesc);
+  $('pageTaskDate').addEventListener('change', updatePageTaskRepeatDesc);
+  $('pageTaskModal').addEventListener('keydown', e=>{
+    if(e.key==='Enter' && e.target.tagName !== 'TEXTAREA'){ e.preventDefault(); $('pageTaskCreateBtn').click(); }
+    else if(e.key==='Escape'){ $('pageTaskCancelBtn').click(); }
+  });
   $('pageTaskCancelBtn').addEventListener('click', ()=>{
     toolbarPromptOpen = false;
     pendingTaskRange = null;
@@ -1234,10 +1311,39 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   function addInterval(dateStr, freq, n){
     const d = new Date(dateStr+'T00:00:00');
+    if(n===0) return dateStr;
     if(freq==='daily') d.setDate(d.getDate()+n);
     else if(freq==='weekly') d.setDate(d.getDate()+7*n);
-    else if(freq==='monthly') d.setMonth(d.getMonth()+n);
+    else if(freq==='monthly_date') d.setMonth(d.getMonth()+n);
+    else if(freq==='monthly_weekday'){
+      const weekday = d.getDay();
+      const nth = Math.ceil(d.getDate()/7); // 1st, 2nd, 3rd... occurrence of this weekday
+      const target = new Date(d.getFullYear(), d.getMonth()+n, 1);
+      let day = 1 + ((7 + weekday - target.getDay()) % 7) + (nth-1)*7;
+      const daysInTarget = new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
+      if(day > daysInTarget) day -= 7; // that month has one fewer occurrence — fall back to the last one
+      target.setDate(day);
+      return localDateStr(target);
+    }
     return localDateStr(d);
+  }
+  const ORDINALS = ['first','second','third','fourth','fifth'];
+  function describeRecurrence(freq, dateStr){
+    if(!freq || freq==='none' || !dateStr) return '';
+    const d = new Date(dateStr+'T00:00:00');
+    const weekdayName = d.toLocaleDateString(undefined,{weekday:'long'});
+    if(freq==='daily') return 'Repeats every day.';
+    if(freq==='weekly') return `Repeats every ${weekdayName}.`;
+    if(freq==='monthly_date') return `Repeats monthly on the ${d.getDate()}${ordinalSuffix(d.getDate())}.`;
+    if(freq==='monthly_weekday'){
+      const nth = Math.ceil(d.getDate()/7);
+      return `Repeats monthly on the ${ORDINALS[nth-1]||nth+'th'} ${weekdayName}.`;
+    }
+    return '';
+  }
+  function ordinalSuffix(n){
+    if(n>=11 && n<=13) return 'th';
+    switch(n%10){ case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
   }
   async function addTaskFromRow(block, listId){
     const text = block.querySelector('.task-text').value.trim();
@@ -1389,7 +1495,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
             <option value="none">Doesn't repeat</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
+            <option value="monthly_date">Monthly (same date)</option>
+            <option value="monthly_weekday">Monthly (same weekday)</option>
           </select>
           <input type="number" class="task-repeat-count" min="1" max="52" value="4" title="Number of occurrences" style="width:60px;">
           <button class="btn task-add">Add</button>
@@ -1454,6 +1561,22 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           </div>
           <div class="row"><input type="date" class="e-start" title="Start date"><input type="time" class="e-start-time" title="Start time"></div>
           <div class="row"><input type="date" class="e-end" title="End date"><input type="time" class="e-end-time" title="End time"></div>
+          ${t.recurrence_group_id ? `
+          <div class="recur-info">
+            <span>🔁 Part of a repeating series</span>
+            <button class="btn-ghost e-delete-future">Delete this &amp; future occurrences</button>
+          </div>` : `
+          <div class="row">
+            <select class="e-repeat" title="Make this repeat">
+              <option value="none" selected>Doesn't repeat</option>
+              <option value="daily">Repeats daily</option>
+              <option value="weekly">Repeats weekly</option>
+              <option value="monthly_date">Repeats monthly (same date)</option>
+              <option value="monthly_weekday">Repeats monthly (same weekday)</option>
+            </select>
+            <input type="number" class="e-repeat-count" min="1" max="52" value="4" title="Number of occurrences" style="width:60px;">
+          </div>
+          <div class="e-repeat-desc" style="font-size:12px;color:var(--muted);"></div>`}
           <div class="task-edit-actions"><button class="btn e-save">Save</button><button class="btn-ghost e-cancel">Cancel</button></div>
         </div>`;
       row.querySelector('.e-text').value = t.text;
@@ -1463,18 +1586,52 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       row.querySelector('.e-start-time').value = t.start_time||'';
       row.querySelector('.e-end').value = t.end_date||'';
       row.querySelector('.e-end-time').value = t.end_time||'';
+      const eRepeat = row.querySelector('.e-repeat');
+      const eRepeatDesc = row.querySelector('.e-repeat-desc');
+      if(eRepeat){
+        const updateDesc = ()=>{ eRepeatDesc.textContent = describeRecurrence(eRepeat.value, row.querySelector('.e-start').value || todayStr()); };
+        eRepeat.addEventListener('change', updateDesc);
+        row.querySelector('.e-start').addEventListener('change', updateDesc);
+        updateDesc();
+      }
+      const deleteFutureBtn = row.querySelector('.e-delete-future');
+      if(deleteFutureBtn){
+        deleteFutureBtn.addEventListener('click', async ()=>{
+          if(!confirm('Delete this task and every future occurrence in this series? Past occurrences are kept.')) return;
+          const toDelete = todos.filter(x=>x.recurrence_group_id===t.recurrence_group_id && x.start_date >= t.start_date);
+          for(const x of toDelete) await sb.from('todos').delete().eq('id', x.id);
+          editingTaskId = null;
+          renderTodos(); renderPageTasksList();
+        });
+      }
       row.querySelector('.e-save').addEventListener('click', async ()=>{
         let start = row.querySelector('.e-start').value || null;
         let end = row.querySelector('.e-end').value || null;
         if(start && !end) end = start;
+        const startTime = row.querySelector('.e-start-time').value || null;
+        const endTime = row.querySelector('.e-end-time').value || null;
+        const text = row.querySelector('.e-text').value.trim() || t.text;
+        const assignee = row.querySelector('.e-assignee').value.trim() || null;
+        const priority = row.querySelector('.e-priority').value;
         await sb.from('todos').update({
-          text: row.querySelector('.e-text').value.trim() || t.text,
-          assignee: row.querySelector('.e-assignee').value.trim() || null,
-          priority: row.querySelector('.e-priority').value,
-          start_date: start, end_date: end,
-          start_time: row.querySelector('.e-start-time').value || null,
-          end_time: row.querySelector('.e-end-time').value || null
+          text, assignee, priority, start_date: start, end_date: end, start_time: startTime, end_time: endTime
         }).eq('id', t.id);
+        if(eRepeat && eRepeat.value !== 'none'){
+          const repeatCount = Math.max(1, Math.min(52, parseInt(row.querySelector('.e-repeat-count').value, 10) || 1));
+          const base = start || todayStr();
+          const groupId = crypto.randomUUID();
+          await sb.from('todos').update({ recurrence_group_id: groupId }).eq('id', t.id);
+          const rows = [];
+          for(let i=1; i<repeatCount; i++){
+            const occDate = addInterval(base, eRepeat.value, i);
+            rows.push({
+              project_id: t.project_id, list_id: t.list_id, page_id: t.page_id, text, assignee, priority,
+              start_date: occDate, end_date: occDate, start_time: startTime, end_time: endTime,
+              done:false, recurrence_group_id: groupId
+            });
+          }
+          if(rows.length) await sb.from('todos').insert(rows);
+        }
         editingTaskId = null;
         renderTodos(); renderPageTasksList();
       });
@@ -1794,18 +1951,31 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // ---------- Recurring appointment → downloadable .ics with a real RRULE ----------
   // A single VEVENT with RRULE is what makes Google/Apple Calendar treat this as
   // ONE recurring series (editable/deletable as a whole), not N separate events.
+  function buildRRule(freq, count, dateStr){
+    if(freq==='none') return null;
+    if(freq==='daily') return `FREQ=DAILY;COUNT=${count}`;
+    if(freq==='weekly') return `FREQ=WEEKLY;COUNT=${count}`;
+    if(freq==='monthly_date') return `FREQ=MONTHLY;COUNT=${count}`;
+    if(freq==='monthly_weekday'){
+      const d = new Date(dateStr+'T00:00:00');
+      const nth = Math.ceil(d.getDate()/7);
+      const dayCodes = ['SU','MO','TU','WE','TH','FR','SA'];
+      return `FREQ=MONTHLY;BYDAY=${nth}${dayCodes[d.getDay()]};COUNT=${count}`;
+    }
+    return null;
+  }
   function downloadRecurringICS({title, location, date, startTime, endTime, freq, count}){
     const dtStart = date.replace(/-/g,'') + 'T' + startTime.replace(':','') + '00';
     const dtEnd = date.replace(/-/g,'') + 'T' + endTime.replace(':','') + '00';
     const nowStamp = new Date().toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-    const freqMap = { daily:'DAILY', weekly:'WEEKLY', monthly:'MONTHLY' };
     const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Basecamp Jr//EN','BEGIN:VEVENT',
       `UID:${crypto.randomUUID()}@basecampjr`,
       `DTSTAMP:${nowStamp}`,
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`
     ];
-    if(freq !== 'none') lines.push(`RRULE:FREQ=${freqMap[freq]};COUNT=${count}`);
+    const rrule = buildRRule(freq, count, date);
+    if(rrule) lines.push(`RRULE:${rrule}`);
     lines.push(`SUMMARY:${(title||'Appointment').replace(/\n/g,' ')}`);
     if(location) lines.push(`LOCATION:${location.replace(/\n/g,' ')}`);
     lines.push('END:VEVENT','END:VCALENDAR');
@@ -1816,13 +1986,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
+  function updateApptRepeatDesc(){
+    const freq = $('apptRepeat').value;
+    const date = $('apptDate').value || todayStr();
+    $('apptRepeatDesc').textContent = describeRecurrence(freq, date);
+  }
+  $('apptRepeat').addEventListener('change', updateApptRepeatDesc);
+  $('apptDate').addEventListener('change', updateApptRepeatDesc);
   $('addApptBtn').addEventListener('click', ()=>{
     $('apptTitle').value = ''; $('apptLocation').value = '';
     $('apptDate').value = todayStr(); $('apptStartTime').value = ''; $('apptEndTime').value = '';
     $('apptRepeat').value = 'weekly'; $('apptCount').value = '4';
     $('apptDone').classList.add('hidden');
+    updateApptRepeatDesc();
     $('apptModal').classList.remove('hidden');
     $('apptTitle').focus();
+  });
+  $('apptModal').addEventListener('keydown', e=>{
+    if(e.key==='Enter' && e.target.tagName !== 'TEXTAREA'){ e.preventDefault(); $('apptCreateBtn').click(); }
+    else if(e.key==='Escape'){ $('apptCancelBtn').click(); }
   });
   $('apptCancelBtn').addEventListener('click', ()=>$('apptModal').classList.add('hidden'));
   $('apptCreateBtn').addEventListener('click', async ()=>{
