@@ -199,7 +199,9 @@
   .gantt-cell{border-right:1px solid var(--border);}
   .gantt-bar{position:absolute;top:6px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden;}
   .gantt-bar.high{background:var(--danger);}
+  .gantt-bar.done{background:var(--muted);opacity:0.55;text-decoration:line-through;}
   .gantt-label{font-size:11px;padding:8px;position:sticky;left:0;background:var(--surface);}
+  .gantt-row.done .gantt-label{color:var(--muted);text-decoration:line-through;opacity:0.7;}
 
   .month-today-row{display:flex;justify-content:space-between;margin-bottom:8px;gap:8px;}
   .month-day-layout{display:flex;flex-direction:column;gap:20px;}
@@ -221,12 +223,15 @@
   .cal-day.today .dot{background:#fff;}
   .cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .cal-day .dot{width:4px;height:4px;border-radius:50%;background:var(--gold);position:absolute;bottom:4px;}
+  .cal-day .dot.dot-done{background:var(--muted);opacity:0.6;}
   .cal-day.selected .dot{background:#fff;}
   .gantt-day-cell.sunday, .gantt-cell.sunday{background:var(--gold-soft);}
   .gantt-day-cell.month-start, .gantt-cell.month-start{border-left:2px solid var(--ink);}
   .gantt-day-cell.today-col{background:var(--accent);color:#fff !important;font-weight:800;}
   .gantt-cell.today-col{background:var(--accent-soft);}
   .cal-todo{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
+  .cal-todo.done{opacity:0.55;}
+  .cal-todo.done > div > div:first-child{text-decoration:line-through;}
   .cal-add{border:1px solid var(--accent);background:none;color:var(--accent);font-size:11px;border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;}
 
   nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);max-width:560px;margin:0 auto;display:flex;padding:6px 0;}
@@ -571,7 +576,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.4";
+const APP_VERSION = "2026-09-07.5";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1777,20 +1782,23 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       return `<div class="gantt-day-cell${isSunday?' sunday':''}${isMonthStart?' month-start':''}${isToday?' today-col':''}">${label}<br>${d.getDate()}</div>`;
     }).join('');
     inner.appendChild(dayRow);
-    const scheduled = todos.filter(t=>t.start_date).sort((a,b)=> a.start_date.localeCompare(b.start_date) || (a.start_time||'').localeCompare(b.start_time||''));
+    const scheduled = todos.filter(t=>t.start_date).sort((a,b)=>
+      (a.done?1:0) - (b.done?1:0) ||
+      a.start_date.localeCompare(b.start_date) || (a.start_time||'').localeCompare(b.start_time||'')
+    );
     if(scheduled.length===0){ inner.innerHTML += '<div class="empty">No dated tasks yet. Add a start date to a task to see it here.</div>'; setTimeout(()=>{ scrollGanttToToday(); updateGanttMonthLabel(); }, 50); return; }
     scheduled.forEach(t=>{
       const row = document.createElement('div');
-      row.className = 'gantt-row';
+      row.className = 'gantt-row' + (t.done ? ' done' : '');
       row.style.gridTemplateColumns = colTemplate;
       row.style.minWidth = totalWidth+'px';
       const srcPage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
-      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''}${t.priority==='high'?' · High priority':''}${t.start_time?' · '+fmtTime(t.start_time):''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}`;
+      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''}${t.priority==='high'?' · High priority':''}${t.start_time?' · '+fmtTime(t.start_time):''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}${t.done?' · Done':''}`;
       const label = document.createElement('div');
       label.className = 'gantt-label';
       label.style.cursor = 'pointer';
       label.title = detailTitle;
-      label.textContent = t.text + (t.start_time ? ` (${fmtTime(t.start_time)})` : '');
+      label.textContent = (t.done ? '✓ ' : '') + t.text + (t.start_time ? ` (${fmtTime(t.start_time)})` : '');
       label.addEventListener('click', ()=>goToTaskContext(t));
       row.appendChild(label);
       for(let i=0;i<GANTT_DAYS;i++){ const c=document.createElement('div'); c.className='gantt-cell'+(days[i].getDay()===0?' sunday':'')+(days[i].getDate()===1?' month-start':'')+(localDateStr(days[i])===todayStr()?' today-col':''); row.appendChild(c); }
@@ -1803,12 +1811,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       const startOffset = Math.round((clipStart - viewStart)/86400000);
       const span = Math.round((clipEnd - clipStart)/86400000) + 1;
       const bar = document.createElement('div');
-      bar.className = 'gantt-bar' + (t.priority==='high' ? ' high' : '');
+      bar.className = 'gantt-bar' + (t.priority==='high' ? ' high' : '') + (t.done ? ' done' : '');
       bar.style.left = `${130 + startOffset*GANTT_DAY_PX}px`;
       bar.style.width = `${span*GANTT_DAY_PX - 4}px`;
       bar.style.cursor = 'pointer';
       bar.title = detailTitle;
-      bar.textContent = t.text;
+      bar.textContent = (t.done ? '✓ ' : '') + t.text;
       bar.addEventListener('click', ()=>goToTaskContext(t));
       row.style.position = 'relative';
       row.appendChild(bar);
@@ -1821,15 +1829,21 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   let calDate = new Date(); calDate.setDate(1);
 
   function computeDueDatesSet(){
-    const s = new Set();
+    const pending = new Set();
+    const doneOnly = new Set();
     todos.forEach(t=>{
       if(!t.start_date) return;
       const end = t.end_date || t.start_date;
       let d = new Date(t.start_date+'T00:00:00');
       const endD = new Date(end+'T00:00:00');
-      while(d<=endD){ s.add(localDateStr(d)); d.setDate(d.getDate()+1); }
+      while(d<=endD){
+        const ds = localDateStr(d);
+        if(t.done){ if(!pending.has(ds)) doneOnly.add(ds); }
+        else { pending.add(ds); doneOnly.delete(ds); }
+        d.setDate(d.getDate()+1);
+      }
     });
-    return s;
+    return { pending, doneOnly };
   }
 
   function renderMonthsTriple(){
@@ -1862,7 +1876,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         const el = document.createElement('div');
         el.id = 'calday-'+dateStr;
         el.className = 'cal-day' + (isSunday?' sunday':'') + (dateStr===today?' today':'') + (dateStr===selectedDay?' selected':'');
-        el.innerHTML = `<span>${d}</span>` + (dueDates.has(dateStr) ? '<span class="dot"></span>' : '');
+        el.innerHTML = `<span>${d}</span>` + (dueDates.pending.has(dateStr) ? '<span class="dot"></span>' : dueDates.doneOnly.has(dateStr) ? '<span class="dot dot-done"></span>' : '');
         el.addEventListener('click', ()=>{ selectedDay = dateStr; renderMonthsTriple(); });
         grid.appendChild(el);
         cellsUsed++;
@@ -1901,11 +1915,28 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function renderAgenda(){
     const list = $('calList');
     list.innerHTML = '';
-    const scheduled = todos.filter(t=>t.start_date).sort((a,b)=> a.start_date.localeCompare(b.start_date) || (a.start_time||'').localeCompare(b.start_time||''));
-    if(scheduled.length===0){ list.innerHTML = '<div class="empty">Nothing scheduled yet.</div>'; return; }
-    let lastDate = null;
+    const all = todos.filter(t=>t.start_date).sort((a,b)=> a.start_date.localeCompare(b.start_date) || (a.start_time||'').localeCompare(b.start_time||''));
+    if(all.length===0){ list.innerHTML = '<div class="empty">Nothing scheduled yet.</div>'; return; }
     const today = todayStr();
-    scheduled.forEach(t=>{
+    const incomplete = all.filter(t=>!t.done);
+    const completed = all.filter(t=>t.done);
+
+    function renderRow(t){
+      const row = document.createElement('div');
+      row.className='cal-todo' + (t.done ? ' done' : '');
+      const timeLabel = t.start_time ? `${fmtTime(t.start_time)}${t.end_time?'–'+fmtTime(t.end_time):''}` : 'All day';
+      const srcPage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
+      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''} · ${timeLabel}${t.priority==='high'?' · High priority':''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}${t.done?' · Done':''}`;
+      row.title = detailTitle;
+      row.innerHTML = `<div style="cursor:pointer;"><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'} · ${timeLabel}${srcPage ? ' · 📝 '+(srcPage.title||'Untitled page') : ''}</div></div><button class="cal-add">Add to calendar</button>`;
+      row.querySelector('div > div').textContent = (t.done ? '✓ ' : '') + t.text;
+      row.querySelector('div').addEventListener('click', ()=>goToTaskContext(t));
+      row.querySelector('.cal-add').addEventListener('click', (e)=>{ e.stopPropagation(); downloadICS(t); });
+      return row;
+    }
+
+    let lastDate = null;
+    incomplete.forEach(t=>{
       if(t.start_date !== lastDate){
         lastDate = t.start_date;
         const header = document.createElement('div');
@@ -1913,18 +1944,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         header.textContent = new Date(t.start_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'}) + (t.start_date===today ? ' · Today' : '');
         list.appendChild(header);
       }
-      const row = document.createElement('div');
-      row.className='cal-todo';
-      const timeLabel = t.start_time ? `${fmtTime(t.start_time)}${t.end_time?'–'+fmtTime(t.end_time):''}` : 'All day';
-      const srcPage = t.page_id ? pages.find(p=>p.id===t.page_id) : null;
-      const detailTitle = `${t.text}${t.assignee?' · '+t.assignee:''} · ${timeLabel}${t.priority==='high'?' · High priority':''}${srcPage?' · From: '+(srcPage.title||'Untitled page'):''}`;
-      row.title = detailTitle;
-      row.innerHTML = `<div style="cursor:pointer;"><div style="font-size:14px;"></div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${t.assignee||'Unassigned'} · ${timeLabel}${srcPage ? ' · 📝 '+(srcPage.title||'Untitled page') : ''}</div></div><button class="cal-add">Add to calendar</button>`;
-      row.querySelector('div > div').textContent = t.text;
-      row.querySelector('div').addEventListener('click', ()=>goToTaskContext(t));
-      row.querySelector('.cal-add').addEventListener('click', (e)=>{ e.stopPropagation(); downloadICS(t); });
-      list.appendChild(row);
+      list.appendChild(renderRow(t));
     });
+
+    if(completed.length){
+      const header = document.createElement('div');
+      header.className = 'agenda-date-header';
+      header.textContent = `Completed (${completed.length})`;
+      list.appendChild(header);
+      completed.forEach(t=>list.appendChild(renderRow(t)));
+    }
   }
   function downloadICS(t){
     let lines;
