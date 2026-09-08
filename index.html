@@ -571,12 +571,22 @@
         <div class="theme-card-sub">White, Helvetica, navy accent</div>
       </button>
     </div>
+
+    <div class="side-block-title" style="margin-top:24px;">Get a login link for a teammate</div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">If someone isn't receiving their magic link email, generate one here (no email needed) and send it to them yourself — text, Slack, however. They must already be an invited user. Requires the one-time setup in <code>supabase/functions/admin-magic-link</code>.</p>
+    <input type="email" id="magicLinkEmail" placeholder="Their email address">
+    <input type="password" id="magicLinkSecret" placeholder="Admin link secret">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:-4px 0 10px;">
+      <input type="checkbox" id="magicLinkRemember" style="width:auto;"> Remember the secret on this device
+    </label>
+    <button id="magicLinkGetBtn" class="btn">Get link</button>
+    <div id="magicLinkResult" style="margin-top:12px;"></div>
   </div>
 </div>
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.5";
+const APP_VERSION = "2026-09-07.6";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -2173,6 +2183,42 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   $('notifClose').addEventListener('click', ()=>$('notifOverlay').classList.add('hidden'));
   $('settingsBtn').addEventListener('click', ()=>$('settingsOverlay').classList.remove('hidden'));
   $('settingsClose').addEventListener('click', ()=>$('settingsOverlay').classList.add('hidden'));
+
+  // ---------- Get a login link for a teammate (bypasses flaky email) ----------
+  { const savedSecret = localStorage.getItem('bcjr-admin-link-secret');
+    if(savedSecret){ $('magicLinkSecret').value = savedSecret; $('magicLinkRemember').checked = true; } }
+  $('magicLinkGetBtn').addEventListener('click', async ()=>{
+    const email = $('magicLinkEmail').value.trim();
+    const secret = $('magicLinkSecret').value;
+    const resultBox = $('magicLinkResult');
+    if(!email || !secret){ resultBox.innerHTML = '<div style="color:var(--danger);font-size:13px;">Enter both an email and the secret.</div>'; return; }
+    if($('magicLinkRemember').checked) localStorage.setItem('bcjr-admin-link-secret', secret);
+    else localStorage.removeItem('bcjr-admin-link-secret');
+    resultBox.innerHTML = '<div style="color:var(--muted);font-size:13px;">Generating…</div>';
+    try{
+      const { data, error } = await sb.functions.invoke('admin-magic-link', {
+        body: { email, secret, redirectTo: window.location.origin + window.location.pathname }
+      });
+      if(error || (data && data.error)){
+        resultBox.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml((data && data.error) || error.message || 'Something went wrong.')}</div>`;
+        return;
+      }
+      resultBox.innerHTML = `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">This link works once and expires soon — send it to them right away.</div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="magicLinkOut" readonly style="flex:1;font-size:12px;">
+          <button id="magicLinkCopyBtn" class="btn" style="flex-shrink:0;">Copy</button>
+        </div>`;
+      $('magicLinkOut').value = data.link;
+      $('magicLinkCopyBtn').addEventListener('click', ()=>{
+        navigator.clipboard.writeText(data.link);
+        $('magicLinkCopyBtn').textContent = 'Copied ✓';
+        setTimeout(()=>{ $('magicLinkCopyBtn').textContent = 'Copy'; }, 1500);
+      });
+    }catch(e){
+      resultBox.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml(String(e.message||e))}</div>`;
+    }
+  });
 })();
 </script>
 </body>
