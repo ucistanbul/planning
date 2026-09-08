@@ -573,7 +573,7 @@
     </div>
 
     <div class="side-block-title" style="margin-top:24px;">Get a login link for a teammate</div>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">If someone isn't receiving their magic link email, generate one here (no email needed) and send it to them yourself — text, Slack, however. They must already be an invited user. Requires the one-time setup in <code>supabase/functions/admin-magic-link</code>.</p>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.5;">If someone isn't receiving their magic link email, generate one here (no email needed) and send it to them yourself — text, Slack, however. They must already be an invited user. Requires the one-time setup — see SETUP.md.</p>
     <input type="email" id="magicLinkEmail" placeholder="Their email address">
     <input type="password" id="magicLinkSecret" placeholder="Admin link secret">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:-4px 0 10px;">
@@ -586,7 +586,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.6";
+const APP_VERSION = "2026-09-07.7";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -2196,11 +2196,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     else localStorage.removeItem('bcjr-admin-link-secret');
     resultBox.innerHTML = '<div style="color:var(--muted);font-size:13px;">Generating…</div>';
     try{
-      const { data, error } = await sb.functions.invoke('admin-magic-link', {
+      const { data, error } = await sb.functions.invoke('dynamic-handler', {
         body: { email, secret, redirectTo: window.location.origin + window.location.pathname }
       });
       if(error || (data && data.error)){
-        resultBox.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml((data && data.error) || error.message || 'Something went wrong.')}</div>`;
+        const detail = (data && data.error) || error.message || 'Something went wrong.';
+        const isFetchError = error && error.name === 'FunctionsFetchError';
+        resultBox.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml(detail)}${isFetchError ? '<br><span style="color:var(--muted);">This usually means the function name in Supabase doesn\'t match what the app is calling — double-check the exact deployed name.</span>' : ''}</div>`;
         return;
       }
       resultBox.innerHTML = `
