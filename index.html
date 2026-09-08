@@ -320,6 +320,7 @@
     <input type="email" id="authEmail" placeholder="you@company.com" autocomplete="email">
     <button id="authSendBtn">Send magic link</button>
     <div class="auth-status" id="authStatus"></div>
+    <div id="authLinkError" class="hidden" style="margin-top:14px;padding:12px;background:#FCE8E6;border-radius:8px;font-size:13px;color:#8A2E22;line-height:1.5;"></div>
   </div>
 </div>
 
@@ -586,7 +587,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-07.7";
+const APP_VERSION = "2026-09-08.1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -734,6 +735,30 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   $('signOutBtn').addEventListener('click', async ()=>{ await sb.auth.signOut(); });
   sb.auth.onAuthStateChange((_e, session)=>{ if(session) showApp(); else showAuth(); });
   (async ()=>{ const { data } = await sb.auth.getSession(); if(data.session) showApp(); else showAuth(); })();
+
+  // If a magic/admin link failed to verify, Supabase appends error details to
+  // the redirect URL (hash or query) instead of a session. Surface those
+  // instead of silently falling back to a blank sign-in screen — the actual
+  // reason (expired link, already used, bad redirect config, etc.) is right
+  // there and otherwise invisible.
+  (function showAuthLinkErrorIfAny(){
+    const raw = (window.location.hash || '').replace(/^#/, '') || window.location.search.replace(/^\?/, '');
+    const params = new URLSearchParams(raw);
+    const errCode = params.get('error_code') || params.get('error');
+    const errDesc = params.get('error_description');
+    if(!errCode && !errDesc) return;
+    const box = document.getElementById('authLinkError');
+    if(box){
+      const friendly = {
+        'otp_expired': "This link has expired — magic links only work for a limited time. Generate a new one.",
+        'access_denied': "This link was denied — it may have already been used. Each link only works once; generate a new one.",
+      };
+      box.textContent = friendly[errCode] || `Sign-in failed: ${(errDesc || errCode || 'unknown error').replace(/\+/g,' ')}`;
+      box.classList.remove('hidden');
+    }
+    // Clean the error out of the URL so a refresh doesn't keep re-showing it.
+    history.replaceState(null, '', window.location.pathname);
+  })();
 
   // ---------- Bootstrap ----------
   async function bootstrap(){
