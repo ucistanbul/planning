@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Basecamp Jr.</title>
+<title>Basecamp.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -188,19 +188,21 @@
   .gantt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;}
   .gantt-head button{border:none;background:var(--surface);border:1px solid var(--border);width:28px;height:28px;border-radius:8px;font-size:14px;cursor:pointer;}
   .gantt-head .range{font-family:'Manrope',sans-serif;font-size:14px;flex:1;text-align:center;}
-  .gantt-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
+  .gantt-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,0.05);}
   .gantt-months{display:grid;border-bottom:1px solid var(--border);background:var(--accent-soft);}
-  .gantt-month-band{font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;color:var(--accent);padding:6px 0 6px 8px;border-left:2px solid var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .gantt-month-band{font-family:'Manrope',sans-serif;font-size:13px;font-weight:700;color:var(--accent);padding:9px 0 9px 10px;border-left:2px solid var(--surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .gantt-month-band.alt{background:var(--page-soft);color:var(--page);}
-  .gantt-days{display:grid;font-size:9px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);}
-  .gantt-day-cell{padding:6px 0;border-right:1px solid var(--border);}
-  .gantt-row{display:grid;border-bottom:1px solid var(--border);min-height:34px;position:relative;}
+  .gantt-days{display:grid;font-size:11px;font-weight:600;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);}
+  .gantt-day-cell{padding:9px 0;border-right:1px solid rgba(0,0,0,0.05);}
+  .gantt-row{display:grid;border-bottom:1px solid rgba(0,0,0,0.05);min-height:46px;position:relative;transition:background .1s;}
+  .gantt-row:hover{background:var(--bg);}
   .gantt-row:last-child{border-bottom:none;}
-  .gantt-cell{border-right:1px solid var(--border);}
-  .gantt-bar{position:absolute;top:6px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden;}
+  .gantt-cell{border-right:1px solid rgba(0,0,0,0.05);}
+  .gantt-bar{position:absolute;top:9px;height:28px;border-radius:7px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;padding:0 10px;white-space:nowrap;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.12);}
   .gantt-bar.high{background:var(--danger);}
   .gantt-bar.done{background:var(--muted);opacity:0.55;text-decoration:line-through;}
-  .gantt-label{font-size:11px;padding:8px;position:sticky;left:0;background:var(--surface);}
+  .gantt-label{font-size:13px;font-weight:500;padding:12px;position:sticky;left:0;background:var(--surface);}
+  .gantt-row:hover .gantt-label{background:var(--bg);}
   .gantt-row.done .gantt-label{color:var(--muted);text-decoration:line-through;opacity:0.7;}
 
   .month-today-row{display:flex;justify-content:space-between;margin-bottom:8px;gap:8px;}
@@ -315,7 +317,7 @@
 
 <div id="authScreen" class="auth-screen hidden">
   <div class="auth-card">
-    <h1>Basecamp&nbsp;Jr.</h1>
+    <h1>Basecamp<span style="color:var(--accent);">.</span></h1>
     <p>Sign in with your team email. You'll get a one-time link — no password needed. Only teammates who've been invited can sign in.</p>
     <input type="email" id="authEmail" placeholder="you@company.com" autocomplete="email">
     <button id="authSendBtn">Send magic link</button>
@@ -340,7 +342,7 @@
 
   <div class="main-column">
   <header>
-    <div class="brand">Basecamp&nbsp;Jr. <span id="versionTag" style="font-family:'Inter',sans-serif;font-size:10px;font-weight:400;color:var(--muted);vertical-align:middle;"></span></div>
+    <div class="brand">Basecamp<span class="accent-dot">.</span> <span id="versionTag" style="font-family:'Inter',sans-serif;font-size:10px;font-weight:400;color:var(--muted);vertical-align:middle;"></span></div>
     <div class="icons">
       <button class="icon-btn" id="searchBtn" title="Search">🔍</button>
       <button class="icon-btn" id="notifBtn" title="Notifications">🔔<span class="badge hidden" id="notifBadge">0</span></button>
@@ -587,7 +589,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.1";
+const APP_VERSION = "2026-09-08.2";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
