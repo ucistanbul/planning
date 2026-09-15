@@ -387,7 +387,12 @@
           </div>
           <div class="page-side">
             <div>
-              <div class="side-block-title">Tasks in this page</div>
+              <div class="side-block-title" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Tasks in this page</span>
+                <label style="font-size:11px;font-weight:400;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+                  <input type="checkbox" id="pageTasksHideDone" style="width:auto;"> Hide completed
+                </label>
+              </div>
               <div id="pageTasksList"></div>
             </div>
             <div>
@@ -589,7 +594,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.2";
+const APP_VERSION = "2026-09-08.3";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -935,6 +940,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     selectedPageId = id;
     $('pagesListView').classList.add('hidden');
     $('pageDetailView').classList.remove('hidden');
+    $('pageTasksHideDone').checked = pageTasksHideDone;
     syncPageDetailFromData();
     renderPageTasksList();
     renderPageCommentsPane();
@@ -943,6 +949,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(markerCheckInterval) clearInterval(markerCheckInterval);
     markerCheckInterval = setInterval(syncMarkerDeletions, 1500);
   }
+  $('pageTasksHideDone').addEventListener('change', e=>{
+    pageTasksHideDone = e.target.checked;
+    localStorage.setItem('bcjr-page-tasks-hide-done', pageTasksHideDone ? '1' : '0');
+    renderPageTasksList();
+  });
   $('pageBackBtn').addEventListener('click', ()=>{
     selectedPageId = null;
     $('pageDetailView').classList.add('hidden');
@@ -1285,18 +1296,29 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     }
   });
 
+  let pageTasksHideDone = localStorage.getItem('bcjr-page-tasks-hide-done') === '1';
   function renderPageTasksList(){
     const box = $('pageTasksList');
     if(!box) return;
     box.innerHTML = '';
     if(!selectedPageId) return;
-    const items = todos.filter(t=>t.page_id===selectedPageId);
-    if(items.length===0){ box.innerHTML = '<div class="empty">No tasks yet. Use the ☐ Task button above to add one.</div>'; return; }
+    const all = todos.filter(t=>t.page_id===selectedPageId);
+    if(all.length===0){ box.innerHTML = '<div class="empty">No tasks yet. Use the ☐ Task button above to add one.</div>'; return; }
+    const doneCount = all.filter(t=>t.done).length;
+    const items = (pageTasksHideDone ? all.filter(t=>!t.done) : all)
+      .sort((a,b)=> (a.done?1:0) - (b.done?1:0));
+    if(items.length===0){ box.innerHTML = `<div class="empty">All ${doneCount} task${doneCount===1?'':'s'} completed — hidden. Uncheck "Hide completed" to see ${doneCount===1?'it':'them'}.</div>`; return; }
     items.forEach(t=>{
       const row = todoRow(t);
       row.id = 'side-todo-'+t.id;
       box.appendChild(row);
     });
+    if(pageTasksHideDone && doneCount>0){
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--muted);text-align:center;padding:6px;';
+      note.textContent = `${doneCount} completed task${doneCount===1?'':'s'} hidden`;
+      box.appendChild(note);
+    }
   }
 
   let editingPageCommentId = null;
