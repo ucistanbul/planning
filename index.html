@@ -112,6 +112,12 @@
   .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
   .page-toolbar button{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 8px;font-size:12px;cursor:pointer;font-family:inherit;}
   .toolbar-sep{width:1px;height:18px;background:var(--border);margin:0 2px;}
+  .user-table{border-collapse:collapse;margin:8px 0;max-width:100%;}
+  .user-table td{border:1px solid var(--border);padding:6px 8px;min-width:40px;min-height:20px;vertical-align:top;position:relative;}
+  .col-resize-handle{position:absolute;top:0;right:-4px;width:7px;height:100%;cursor:col-resize;z-index:2;}
+  .col-resize-handle:hover{background:var(--accent-soft);}
+  .row-resize-handle{position:absolute;left:0;bottom:-4px;width:100%;height:7px;cursor:row-resize;z-index:2;}
+  .row-resize-handle:hover{background:var(--accent-soft);}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
@@ -393,6 +399,7 @@
               <button data-cmd="link" title="Add a hyperlink (Cmd+K). Cmd/Ctrl+click a link to open it.">🔗 Link</button>
               <button data-cmd="task" title="Turn selected text into a task">☐ Task</button>
               <button data-cmd="timestamp" title="Insert today's date and time. Or just type @now followed by a space, anywhere.">🕐 Date/Time</button>
+              <button data-cmd="table" title="Insert a table">▦ Table</button>
             </div>
             <div class="page-body" id="pageBody" contenteditable="true"></div>
           </div>
@@ -611,7 +618,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.4";
+const APP_VERSION = "2026-09-08.5";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -908,7 +915,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function logPageEdit(pageId){
     const now = Date.now();
     const last = lastLoggedEdit[pageId] || 0;
-    if(now - last < 5*60*1000) return; // only log once per 5 min of continuous editing
+    if(now - last < 45*1000) return; // only log once per 45s of continuous editing — frequent enough to feel real, not spammy per-keystroke
     lastLoggedEdit[pageId] = now;
     sb.from('page_activity').insert({ page_id: pageId, actor: myName, action: 'edited' });
   }
@@ -1019,7 +1026,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const p = pages.find(x=>x.id===selectedPageId);
     if(!p){ $('pageBackBtn').click(); return; }
     if(document.activeElement !== $('pageTitleInput')) $('pageTitleInput').value = p.title || '';
-    if(!pageBodyFocused && $('pageBody').innerHTML !== (p.body||'')) $('pageBody').innerHTML = p.body || '';
+    if(!pageBodyFocused && $('pageBody').innerHTML !== (p.body||'')){ $('pageBody').innerHTML = p.body || ''; attachTableResizeHandles($('pageBody')); }
     establishMarkerBaseline();
   }
 
@@ -1049,10 +1056,68 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   }
   $('pageTitleInput').addEventListener('input', savePage);
   const pageBodyEl = $('pageBody');
+  // Sanitizes pasted HTML: keeps basic formatting, real hyperlinks, and our
+  // own task-links; strips everything else (scripts, styles, images, random
+  // classes/inline styles from whatever site/app it was copied from) down to
+  // plain text. Built on the DOM rather than regex for correctness.
+  function sanitizePastedHtml(rawHtml){
+    const allowedTags = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, UL:1, OL:1, LI:1, BR:1, P:1, DIV:1, SPAN:1 };
+    const src = document.createElement('div');
+    src.innerHTML = rawHtml;
+    src.querySelectorAll('script,style,meta,link,iframe,object,embed,svg,img,video,audio,form,input,button,noscript').forEach(el=>el.remove());
+
+    function cleanChildren(node){
+      const frag = document.createDocumentFragment();
+      node.childNodes.forEach(child=>{
+        if(child.nodeType === Node.TEXT_NODE){ frag.appendChild(child.cloneNode()); return; }
+        if(child.nodeType !== Node.ELEMENT_NODE) return; // drop comments etc.
+        const tag = child.tagName;
+        const innerCleaned = cleanChildren(child); // clean children first regardless of what happens to this node
+        if(!allowedTags[tag]){ frag.appendChild(innerCleaned); return; } // unwrap: keep content, drop the wrapper
+        if(tag === 'A'){
+          const isTaskLink = child.classList.contains('task-link') && child.dataset.taskId;
+          if(isTaskLink){
+            const el = document.createElement('a');
+            el.className = 'task-link';
+            el.setAttribute('contenteditable','false');
+            el.dataset.taskId = child.dataset.taskId;
+            if(child.title) el.title = child.title;
+            el.appendChild(innerCleaned);
+            frag.appendChild(el);
+            return;
+          }
+          const href = child.getAttribute('href') || '';
+          if(/^(https?:|mailto:)/i.test(href)){
+            const el = document.createElement('a');
+            el.setAttribute('href', href);
+            el.setAttribute('target','_blank');
+            el.setAttribute('rel','noopener');
+            el.appendChild(innerCleaned);
+            frag.appendChild(el);
+            return;
+          }
+          frag.appendChild(innerCleaned); // no safe href and not a task-link — just unwrap
+          return;
+        }
+        const el = document.createElement(tag.toLowerCase());
+        el.appendChild(innerCleaned);
+        frag.appendChild(el);
+      });
+      return frag;
+    }
+    const out = document.createElement('div');
+    out.appendChild(cleanChildren(src));
+    return out.innerHTML;
+  }
   pageBodyEl.addEventListener('paste', (e)=>{
     e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-    document.execCommand('insertText', false, text);
+    const cd = e.clipboardData || window.clipboardData;
+    const html = cd.getData('text/html');
+    if(html && html.trim()){
+      document.execCommand('insertHTML', false, sanitizePastedHtml(html));
+    } else {
+      document.execCommand('insertText', false, cd.getData('text/plain'));
+    }
   });
   pageBodyEl.addEventListener('click', (e)=>{
     const link = e.target.closest('a.task-link');
@@ -1104,6 +1169,62 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
     document.execCommand('insertText', false, stamp);
     savePage();
+  }
+  // Attaches drag-to-resize handles to every table in the given root. Safe to
+  // call repeatedly on the same content — reuses existing handle elements
+  // rather than stacking duplicates, since event listeners don't survive an
+  // innerHTML reassignment (e.g. when realtime sync refreshes the page body)
+  // and need reattaching every time regardless.
+  function attachTableResizeHandles(root){
+    root.querySelectorAll('table.user-table').forEach(table=>{
+      const firstRow = table.rows[0];
+      if(firstRow){
+        Array.from(firstRow.cells).forEach((cell, colIdx)=>{
+          let handle = cell.querySelector(':scope > .col-resize-handle');
+          if(!handle){
+            handle = document.createElement('span');
+            handle.className = 'col-resize-handle';
+            handle.contentEditable = 'false';
+            cell.appendChild(handle);
+          }
+          handle.onmousedown = (e)=>{
+            e.preventDefault(); e.stopPropagation();
+            const startX = e.clientX;
+            const startWidth = cell.offsetWidth;
+            function onMove(e2){
+              const newWidth = Math.max(40, startWidth + (e2.clientX - startX));
+              Array.from(table.rows).forEach(row=>{ if(row.cells[colIdx]) row.cells[colIdx].style.width = newWidth+'px'; });
+            }
+            function onUp(){ document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); savePage(); }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          };
+        });
+      }
+      Array.from(table.rows).forEach(row=>{
+        const cell = row.cells[0];
+        if(!cell) return;
+        let handle = cell.querySelector(':scope > .row-resize-handle');
+        if(!handle){
+          handle = document.createElement('span');
+          handle.className = 'row-resize-handle';
+          handle.contentEditable = 'false';
+          cell.appendChild(handle);
+        }
+        handle.onmousedown = (e)=>{
+          e.preventDefault(); e.stopPropagation();
+          const startY = e.clientY;
+          const startHeight = row.offsetHeight;
+          function onMove(e2){
+            const newHeight = Math.max(24, startHeight + (e2.clientY - startY));
+            Array.from(row.cells).forEach(c=>{ c.style.height = newHeight+'px'; });
+          }
+          function onUp(){ document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); savePage(); }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        };
+      });
+    });
   }
   function insertLinkAtSelection(){
     pageBodyEl.focus();
@@ -1258,6 +1379,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         savePage();
       } else if(cmd==='timestamp'){
         insertTimestamp();
+      } else if(cmd==='table'){
+        pageBodyEl.focus();
+        toolbarPromptOpen = true;
+        const size = prompt('Table size, e.g. "3x4" (rows x columns)', '3x3');
+        toolbarPromptOpen = false;
+        if(!size) return;
+        const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
+        const rows = m ? Math.max(1, Math.min(20, parseInt(m[1],10))) : 3;
+        const cols = m ? Math.max(1, Math.min(10, parseInt(m[2],10))) : 3;
+        let html = '<table class="user-table">';
+        for(let r=0;r<rows;r++){
+          html += '<tr>';
+          for(let c=0;c<cols;c++) html += '<td><br></td>';
+          html += '</tr>';
+        }
+        html += '</table><div><br></div>';
+        document.execCommand('insertHTML', false, html);
+        attachTableResizeHandles(pageBodyEl);
+        savePage();
       } else {
         document.execCommand(cmd, false, null);
         savePage();
