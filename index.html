@@ -118,6 +118,9 @@
   .col-resize-handle:hover{background:var(--accent-soft);}
   .row-resize-handle{position:absolute;left:0;bottom:-4px;width:100%;height:7px;cursor:row-resize;z-index:2;}
   .row-resize-handle:hover{background:var(--accent-soft);}
+  .table-controls{display:flex;gap:6px;margin:-4px 0 8px;}
+  .table-controls button{border:1px dashed var(--border);background:none;border-radius:6px;padding:3px 9px;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;}
+  .table-controls button:hover{border-color:var(--accent);color:var(--accent);}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
@@ -618,7 +621,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.5";
+const APP_VERSION = "2026-09-08.6";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -917,7 +920,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const last = lastLoggedEdit[pageId] || 0;
     if(now - last < 45*1000) return; // only log once per 45s of continuous editing — frequent enough to feel real, not spammy per-keystroke
     lastLoggedEdit[pageId] = now;
-    sb.from('page_activity').insert({ page_id: pageId, actor: myName, action: 'edited' });
+    sb.from('page_activity').insert({ page_id: pageId, actor: myName, action: 'edited this page' });
   }
 
   $('newPageBtn').addEventListener('click', async ()=>{
@@ -967,8 +970,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const box = $('pageHistory');
     if(!box || !selectedPageId) return;
     const items = [];
+    const page = pages.find(p=>p.id===selectedPageId);
+    if(page && page.created_at){
+      items.push({ ts:page.created_at, txt:`${page.created_by||'Someone'} created this page` });
+    }
     pageActivity.filter(a=>a.page_id===selectedPageId).forEach(a=>{
-      items.push({ ts:a.created_at, txt:`${a.actor||'Someone'} edited this page` });
+      items.push({ ts:a.created_at, txt:`${a.actor||'Someone'} ${a.action||'edited this page'}` });
     });
     pageComments.filter(c=>c.page_id===selectedPageId).forEach(c=>{
       items.push({ ts:c.created_at, txt:`${c.created_by||'Someone'} commented: "${c.body.slice(0,50)}${c.body.length>50?'…':''}"` });
@@ -1061,7 +1068,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // classes/inline styles from whatever site/app it was copied from) down to
   // plain text. Built on the DOM rather than regex for correctness.
   function sanitizePastedHtml(rawHtml){
-    const allowedTags = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, UL:1, OL:1, LI:1, BR:1, P:1, DIV:1, SPAN:1 };
+    const allowedTags = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, UL:1, OL:1, LI:1, BR:1, P:1, DIV:1, SPAN:1, TABLE:1, TBODY:1, THEAD:1, TR:1, TD:1, TH:1 };
     const src = document.createElement('div');
     src.innerHTML = rawHtml;
     src.querySelectorAll('script,style,meta,link,iframe,object,embed,svg,img,video,audio,form,input,button,noscript').forEach(el=>el.remove());
@@ -1100,6 +1107,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           return;
         }
         const el = document.createElement(tag.toLowerCase());
+        if(tag === 'TABLE' && child.classList.contains('user-table')) el.className = 'user-table';
         el.appendChild(innerCleaned);
         frag.appendChild(el);
       });
@@ -1109,12 +1117,32 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     out.appendChild(cleanChildren(src));
     return out.innerHTML;
   }
+  pageBodyEl.addEventListener('beforeinput', (e)=>{
+    // Chrome's native delete silently does nothing when a selection spans a
+    // <table> that has any contenteditable="false" descendant (our resize
+    // handles) — confirmed directly: the table survives untouched, even for
+    // a full select-all. Range.deleteContents() called from JS handles this
+    // correctly where the native keyboard path doesn't, so we do it
+    // ourselves specifically when a table is actually involved.
+    if(!['deleteContentBackward','deleteContentForward','deleteByCut'].includes(e.inputType)) return;
+    const sel = window.getSelection();
+    if(!sel.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if(!range.cloneContents().querySelector('table.user-table')) return;
+    e.preventDefault();
+    range.deleteContents();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    savePage();
+    syncMarkerDeletions();
+  });
   pageBodyEl.addEventListener('paste', (e)=>{
     e.preventDefault();
     const cd = e.clipboardData || window.clipboardData;
     const html = cd.getData('text/html');
     if(html && html.trim()){
       document.execCommand('insertHTML', false, sanitizePastedHtml(html));
+      attachTableResizeHandles(pageBodyEl);
     } else {
       document.execCommand('insertText', false, cd.getData('text/plain'));
     }
@@ -1177,6 +1205,31 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // and need reattaching every time regardless.
   function attachTableResizeHandles(root){
     root.querySelectorAll('table.user-table').forEach(table=>{
+      // Ensure add-row/add-column controls exist right after the table —
+      // idempotent, so tables saved before this feature existed get them too.
+      let controls = table.nextElementSibling;
+      if(!controls || !controls.classList || !controls.classList.contains('table-controls')){
+        controls = document.createElement('div');
+        controls.className = 'table-controls';
+        controls.contentEditable = 'false';
+        controls.innerHTML = '<button class="table-add-row" type="button">+ Row</button><button class="table-add-col" type="button">+ Column</button>';
+        table.parentNode.insertBefore(controls, table.nextSibling);
+      }
+      controls.querySelector('.table-add-row').onclick = ()=>{
+        const cols = table.rows[0] ? table.rows[0].cells.length : 1;
+        const tr = document.createElement('tr');
+        for(let i=0;i<cols;i++) tr.appendChild(document.createElement('td')).innerHTML = '<br>';
+        table.appendChild(tr);
+        attachTableResizeHandles(root);
+        savePage();
+        pageBodyEl.focus();
+      };
+      controls.querySelector('.table-add-col').onclick = ()=>{
+        Array.from(table.rows).forEach(row=>{ row.appendChild(document.createElement('td')).innerHTML = '<br>'; });
+        attachTableResizeHandles(root);
+        savePage();
+        pageBodyEl.focus();
+      };
       const firstRow = table.rows[0];
       if(firstRow){
         Array.from(firstRow.cells).forEach((cell, colIdx)=>{
@@ -1257,7 +1310,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function syncMarkerDeletions(){
     const current = scanMarkerIds();
     knownMarkerIds.forEach(id=>{
-      if(!current.has(id)) sb.from('todos').delete().eq('id', id);
+      if(!current.has(id)){
+        const existing = todos.find(x=>x.id===id);
+        if(existing && existing.page_id) sb.from('page_activity').insert({ page_id: existing.page_id, actor: myName, action: `removed the task "${existing.text}"` });
+        sb.from('todos').delete().eq('id', id);
+      }
     });
     knownMarkerIds = current;
   }
@@ -1847,6 +1904,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         deleteFutureBtn.addEventListener('click', async ()=>{
           if(!confirm('Delete this task and every future occurrence in this series? Past occurrences are kept.')) return;
           const toDelete = todos.filter(x=>x.recurrence_group_id===t.recurrence_group_id && x.start_date >= t.start_date);
+          logTaskActivity(`removed this task and ${toDelete.length-1} future occurrence${toDelete.length-1===1?'':'s'} of "${t.text}"`);
           for(const x of toDelete) await sb.from('todos').delete().eq('id', x.id);
           editingTaskId = null;
           renderTodos(); renderPageTasksList();
@@ -1864,6 +1922,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         await sb.from('todos').update({
           text, assignee, priority, start_date: start, end_date: end, start_time: startTime, end_time: endTime
         }).eq('id', t.id);
+        logTaskActivity(`updated the task "${text}"`);
         if(eRepeat && eRepeat.value !== 'none'){
           const repeatCount = Math.max(1, Math.min(52, parseInt(row.querySelector('.e-repeat-count').value, 10) || 1));
           const base = start || todayStr();
@@ -1908,8 +1967,21 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         <button class="del">×</button>
       </div>`;
     row.querySelector('.text').innerHTML = linkify(t.text);
-    row.querySelector('.check').addEventListener('click', async (e)=>{ e.stopPropagation(); await sb.from('todos').update({ done: !t.done }).eq('id', t.id); });
-    row.querySelector('.del').addEventListener('click', async (e)=>{ e.stopPropagation(); await sb.from('todos').delete().eq('id', t.id); });
+    function logTaskActivity(message){
+      if(!t.page_id) return; // only tasks linked to a page have history to log to
+      sb.from('page_activity').insert({ page_id: t.page_id, actor: myName, action: message });
+    }
+    row.querySelector('.check').addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const nowDone = !t.done;
+      await sb.from('todos').update({ done: nowDone }).eq('id', t.id);
+      logTaskActivity(`${nowDone ? 'completed' : 're-opened'} the task "${t.text}"`);
+    });
+    row.querySelector('.del').addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      logTaskActivity(`removed the task "${t.text}"`);
+      await sb.from('todos').delete().eq('id', t.id);
+    });
     row.querySelector('.body').addEventListener('click', (e)=>{ if(e.target.closest('.tc-toggle') || e.target.closest('.src-page')) return; editingTaskId = t.id; renderTodos(); renderPageTasksList(); });
     const srcBtn = row.querySelector('.src-page');
     if(srcBtn) srcBtn.addEventListener('click', (e)=>{ e.stopPropagation(); activateTab('notes'); openPage(t.page_id); });
