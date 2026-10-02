@@ -118,9 +118,11 @@
   .col-resize-handle:hover{background:var(--accent-soft);}
   .row-resize-handle{position:absolute;left:0;bottom:-4px;width:100%;height:7px;cursor:row-resize;z-index:2;}
   .row-resize-handle:hover{background:var(--accent-soft);}
-  .table-controls{display:flex;gap:6px;margin:-4px 0 8px;}
-  .table-controls button{border:1px dashed var(--border);background:none;border-radius:6px;padding:3px 9px;font-size:11px;color:var(--muted);cursor:pointer;font-family:inherit;}
-  .table-controls button:hover{border-color:var(--accent);color:var(--accent);}
+  .table-wrap{position:relative;display:block;width:fit-content;max-width:100%;margin:8px 0;}
+  .table-wrap .user-table{margin:0;}
+  .row-float-ctrl, .col-float-ctrl{position:absolute;display:none;gap:3px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px;box-shadow:0 2px 6px rgba(0,0,0,0.15);z-index:5;}
+  .row-float-ctrl button, .col-float-ctrl button{width:18px;height:18px;border:none;background:var(--bg);border-radius:4px;font-size:12px;line-height:1;cursor:pointer;color:var(--muted);padding:0;font-family:inherit;}
+  .row-float-ctrl button:hover, .col-float-ctrl button:hover{background:var(--accent-soft);color:var(--accent);}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
@@ -621,7 +623,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.6";
+const APP_VERSION = "2026-09-08.7";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1131,8 +1133,22 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(!range.cloneContents().querySelector('table.user-table')) return;
     e.preventDefault();
     range.deleteContents();
+    let cursorNode = range.startContainer, cursorOffset = range.startOffset;
+    pageBodyEl.querySelectorAll('.table-wrap').forEach(w=>{
+      if(w.querySelector('table')) return;
+      if(w === cursorNode || w.contains(cursorNode)){
+        // cursor would be left inside the div we're about to remove — move it
+        // to just before the div instead, using its parent as the new anchor.
+        cursorOffset = Array.from(w.parentNode.childNodes).indexOf(w);
+        cursorNode = w.parentNode;
+      }
+      w.remove();
+    });
+    const newRange = document.createRange();
+    newRange.setStart(cursorNode, cursorOffset);
+    newRange.collapse(true);
     sel.removeAllRanges();
-    sel.addRange(range);
+    sel.addRange(newRange);
     savePage();
     syncMarkerDeletions();
   });
@@ -1205,31 +1221,87 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // and need reattaching every time regardless.
   function attachTableResizeHandles(root){
     root.querySelectorAll('table.user-table').forEach(table=>{
-      // Ensure add-row/add-column controls exist right after the table —
-      // idempotent, so tables saved before this feature existed get them too.
-      let controls = table.nextElementSibling;
-      if(!controls || !controls.classList || !controls.classList.contains('table-controls')){
-        controls = document.createElement('div');
-        controls.className = 'table-controls';
-        controls.contentEditable = 'false';
-        controls.innerHTML = '<button class="table-add-row" type="button">+ Row</button><button class="table-add-col" type="button">+ Column</button>';
-        table.parentNode.insertBefore(controls, table.nextSibling);
+      // Migrate away from the old persistent +Row/+Column buttons (earlier
+      // version) if a table saved with them gets loaded.
+      const oldControls = table.nextElementSibling;
+      if(oldControls && oldControls.classList && oldControls.classList.contains('table-controls')) oldControls.remove();
+
+      // Wrap the table so the floating hover controls have a stable
+      // positioning context, whether this table was just inserted or is an
+      // older one loaded without a wrapper.
+      let wrap = table.parentElement;
+      if(!wrap.classList || !wrap.classList.contains('table-wrap')){
+        wrap = document.createElement('div');
+        wrap.className = 'table-wrap';
+        table.parentNode.insertBefore(wrap, table);
+        wrap.appendChild(table);
       }
-      controls.querySelector('.table-add-row').onclick = ()=>{
+
+      let rowCtrl = wrap.querySelector(':scope > .row-float-ctrl');
+      if(!rowCtrl){
+        rowCtrl = document.createElement('div');
+        rowCtrl.className = 'row-float-ctrl';
+        rowCtrl.contentEditable = 'false';
+        rowCtrl.innerHTML = '<button class="rf-add" type="button" title="Insert row below">+</button><button class="rf-del" type="button" title="Delete this row">−</button>';
+        wrap.appendChild(rowCtrl);
+      }
+      let colCtrl = wrap.querySelector(':scope > .col-float-ctrl');
+      if(!colCtrl){
+        colCtrl = document.createElement('div');
+        colCtrl.className = 'col-float-ctrl';
+        colCtrl.contentEditable = 'false';
+        colCtrl.innerHTML = '<button class="cf-add" type="button" title="Insert column after">+</button><button class="cf-del" type="button" title="Delete this column">−</button>';
+        wrap.appendChild(colCtrl);
+      }
+
+      let hoverRowIdx = null, hoverColIdx = null, hideTimer = null;
+      function showCtrls(){ clearTimeout(hideTimer); rowCtrl.style.display='flex'; colCtrl.style.display='flex'; }
+      function scheduleHide(){ hideTimer = setTimeout(()=>{ rowCtrl.style.display='none'; colCtrl.style.display='none'; }, 300); }
+      wrap.onmousemove = (e)=>{
+        const cell = e.target.closest('td');
+        if(!cell || !table.contains(cell)) return;
+        const row = cell.parentElement;
+        hoverRowIdx = Array.from(table.rows).indexOf(row);
+        hoverColIdx = Array.from(row.cells).indexOf(cell);
+        const wrapRect = wrap.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
+        rowCtrl.style.top = (rowRect.top - wrapRect.top + rowRect.height/2 - 11) + 'px';
+        rowCtrl.style.left = '-38px';
+        colCtrl.style.left = (cellRect.left - wrapRect.left + cellRect.width/2 - 22) + 'px';
+        colCtrl.style.top = '-30px';
+        showCtrls();
+      };
+      wrap.onmouseleave = scheduleHide;
+      [rowCtrl, colCtrl].forEach(c=>{ c.onmouseenter = ()=>clearTimeout(hideTimer); c.onmouseleave = scheduleHide; });
+
+      rowCtrl.querySelector('.rf-add').onclick = ()=>{
+        if(hoverRowIdx==null) return;
         const cols = table.rows[0] ? table.rows[0].cells.length : 1;
         const tr = document.createElement('tr');
         for(let i=0;i<cols;i++) tr.appendChild(document.createElement('td')).innerHTML = '<br>';
-        table.appendChild(tr);
-        attachTableResizeHandles(root);
-        savePage();
-        pageBodyEl.focus();
+        table.rows[hoverRowIdx].after(tr);
+        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
       };
-      controls.querySelector('.table-add-col').onclick = ()=>{
-        Array.from(table.rows).forEach(row=>{ row.appendChild(document.createElement('td')).innerHTML = '<br>'; });
-        attachTableResizeHandles(root);
-        savePage();
-        pageBodyEl.focus();
+      rowCtrl.querySelector('.rf-del').onclick = ()=>{
+        if(hoverRowIdx==null || table.rows.length<=1) return;
+        table.deleteRow(hoverRowIdx);
+        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
       };
+      colCtrl.querySelector('.cf-add').onclick = ()=>{
+        if(hoverColIdx==null) return;
+        Array.from(table.rows).forEach(row=>{
+          const td = document.createElement('td'); td.innerHTML = '<br>';
+          row.cells[hoverColIdx].after(td);
+        });
+        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
+      };
+      colCtrl.querySelector('.cf-del').onclick = ()=>{
+        if(hoverColIdx==null || table.rows[0].cells.length<=1) return;
+        Array.from(table.rows).forEach(row=>{ if(row.cells[hoverColIdx]) row.deleteCell(hoverColIdx); });
+        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
+      };
+
       const firstRow = table.rows[0];
       if(firstRow){
         Array.from(firstRow.cells).forEach((cell, colIdx)=>{
