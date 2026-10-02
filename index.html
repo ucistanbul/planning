@@ -632,7 +632,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.9";
+const APP_VERSION = "2026-09-08.10";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1139,22 +1139,27 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const sel = window.getSelection();
     if(!sel.rangeCount || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
-    if(!range.cloneContents().querySelector('table.user-table')) return;
+    const ancestorEl = range.commonAncestorContainer.nodeType===3 ? range.commonAncestorContainer.parentElement : range.commonAncestorContainer;
+    const withinListOrTable = ancestorEl && ancestorEl.closest && ancestorEl.closest('li, ul, ol, table.user-table');
+    if(!withinListOrTable && !range.cloneContents().querySelector('table.user-table, ul, ol, li')) return;
     e.preventDefault();
     range.deleteContents();
     let cursorNode = range.startContainer, cursorOffset = range.startOffset;
-    pageBodyEl.querySelectorAll('.table-wrap').forEach(w=>{
-      if(w.querySelector('table')) return;
+    function removeIfEmpty(w, isEmpty){
+      if(!isEmpty(w)) return;
       if(w === cursorNode || w.contains(cursorNode)){
-        // cursor would be left inside the div we're about to remove — move it
-        // to just before the div instead, using its parent as the new anchor.
+        // cursor would be left inside the element we're about to remove —
+        // move it to just before it instead, using its parent as anchor.
         cursorOffset = Array.from(w.parentNode.childNodes).indexOf(w);
         cursorNode = w.parentNode;
       }
       w.remove();
-    });
+    }
+    pageBodyEl.querySelectorAll('.table-wrap').forEach(w=>removeIfEmpty(w, el=>!el.querySelector('table')));
+    pageBodyEl.querySelectorAll('ul, ol').forEach(w=>removeIfEmpty(w, el=>el.textContent.trim()===''));
+    const maxOffset = cursorNode.nodeType===3 ? cursorNode.textContent.length : cursorNode.childNodes.length;
     const newRange = document.createRange();
-    newRange.setStart(cursorNode, cursorOffset);
+    newRange.setStart(cursorNode, Math.min(cursorOffset, maxOffset));
     newRange.collapse(true);
     sel.removeAllRanges();
     sel.addRange(newRange);
@@ -1217,8 +1222,52 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   pageBodyEl.addEventListener('keyup', e=>{
     if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
   });
+  // cloneRange() does not reliably track a position through node reparenting
+  // (confirmed directly) — these compute/restore position as a plain
+  // character count instead, which is unaffected by how the DOM gets
+  // restructured in between, as long as the text content itself is preserved.
+  function textOffsetWithin(root, node, offset){
+    if(root.nodeType === 3) return offset; // root IS the text node itself
+    let total = 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let current;
+    while(current = walker.nextNode()){
+      if(current === node) return total + offset;
+      total += current.textContent.length;
+    }
+    return total;
+  }
+  function rangeAtTextOffset(root, targetOffset){
+    const r = document.createRange();
+    if(root.nodeType === 3){
+      r.setStart(root, Math.min(targetOffset, root.textContent.length));
+      r.collapse(true);
+      return r;
+    }
+    let total = 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let current;
+    while(current = walker.nextNode()){
+      const len = current.textContent.length;
+      if(total + len >= targetOffset){
+        r.setStart(current, targetOffset - total);
+        r.collapse(true);
+        return r;
+      }
+      total += len;
+    }
+    r.selectNodeContents(root);
+    r.collapse(false);
+    return r;
+  }
   function insertTimestamp(){
     pageBodyEl.focus();
+    // If text happens to be selected, don't destroy it — add the timestamp
+    // right after instead of replacing whatever was selected.
+    const sel = window.getSelection();
+    if(sel.rangeCount && !sel.isCollapsed){
+      sel.collapseToEnd();
+    }
     const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
     document.execCommand('insertText', false, stamp);
     savePage();
@@ -1368,46 +1417,95 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function toggleListForCurrentLine(listTag){
     const sel = window.getSelection();
     if(!sel.rangeCount) return;
-    const node = sel.anchorNode;
-    const el = node.nodeType===3 ? node.parentElement : node;
-    const li = el && el.closest ? el.closest('li') : null;
-    const list = li ? li.closest(listTag) : null;
-    if(li && list && pageBodyEl.contains(list)){
-      const parent = list.parentNode;
-      const itemsBefore = [], itemsAfter = [];
-      let seenCurrent = false;
-      Array.from(list.children).forEach(child=>{
-        if(child === li){ seenCurrent = true; return; }
-        (seenCurrent ? itemsAfter : itemsBefore).push(child);
-      });
-      const plain = document.createElement('div');
-      while(li.firstChild) plain.appendChild(li.firstChild);
-      if(plain.textContent.trim()==='') plain.appendChild(document.createElement('br'));
+    const range = sel.getRangeAt(0);
 
-      const toInsert = [];
-      if(itemsBefore.length){
-        const beforeList = document.createElement(listTag);
-        itemsBefore.forEach(i=>beforeList.appendChild(i));
-        toInsert.push(beforeList);
+    // Case 1: cursor (collapsed) is already inside an <li> of this exact list
+    // type — toggle it off, splitting the surrounding list around it.
+    if(sel.isCollapsed){
+      const node = sel.anchorNode;
+      const el = node.nodeType===3 ? node.parentElement : node;
+      const li = el && el.closest ? el.closest('li') : null;
+      const list = li ? li.closest(listTag) : null;
+      if(li && list && pageBodyEl.contains(list)){
+        const parent = list.parentNode;
+        const itemsBefore = [], itemsAfter = [];
+        let seenCurrent = false;
+        Array.from(list.children).forEach(child=>{
+          if(child === li){ seenCurrent = true; return; }
+          (seenCurrent ? itemsAfter : itemsBefore).push(child);
+        });
+        const plain = document.createElement('div');
+        while(li.firstChild) plain.appendChild(li.firstChild);
+        if(plain.textContent.trim()==='') plain.appendChild(document.createElement('br'));
+        const toInsert = [];
+        if(itemsBefore.length){ const b=document.createElement(listTag); itemsBefore.forEach(i=>b.appendChild(i)); toInsert.push(b); }
+        toInsert.push(plain);
+        if(itemsAfter.length){ const a=document.createElement(listTag); itemsAfter.forEach(i=>a.appendChild(i)); toInsert.push(a); }
+        toInsert.forEach(e=>parent.insertBefore(e, list));
+        parent.removeChild(list);
+        const r = document.createRange();
+        r.selectNodeContents(plain);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        savePage();
+        return;
       }
-      toInsert.push(plain);
-      if(itemsAfter.length){
-        const afterList = document.createElement(listTag);
-        itemsAfter.forEach(i=>afterList.appendChild(i));
-        toInsert.push(afterList);
-      }
-      toInsert.forEach(elToInsert=>parent.insertBefore(elToInsert, list));
-      parent.removeChild(list);
+    }
 
-      const r = document.createRange();
-      r.selectNodeContents(plain);
-      r.collapse(false);
+    // Case 2: convert every top-level line the selection touches into list
+    // items of one shared list. For a collapsed cursor this is just the one
+    // line it's in — regardless of where in that line the cursor sits. For a
+    // real selection (possibly spanning several lines), every line gets
+    // converted, and the original text is always preserved, never replaced.
+    const topNodes = Array.from(pageBodyEl.childNodes);
+    let touched = topNodes.filter(n => range.intersectsNode(n));
+    if(touched.length === 0){
+      let el = sel.anchorNode.nodeType===3 ? sel.anchorNode.parentElement : sel.anchorNode;
+      if(el === pageBodyEl){ touched = [sel.anchorNode]; }
+      else {
+        while(el && el.parentElement && el.parentElement !== pageBodyEl) el = el.parentElement;
+        if(el && el.parentElement === pageBodyEl) touched = [el];
+      }
+    }
+    touched = touched.filter(n => !(n.nodeType===3 && n.textContent.trim()===''));
+    if(touched.length === 0) return;
+
+    // For the common single-line, collapsed-cursor case, preserve the exact
+    // cursor position as a character offset within that line's text.
+    const firstNode = touched[0];
+    const preserveOffset = (touched.length===1 && sel.isCollapsed)
+      ? textOffsetWithin(firstNode, range.startContainer, range.startOffset)
+      : null;
+    const lastNode = touched[touched.length-1];
+    const parent = firstNode.parentNode;
+    const refSibling = lastNode.nextSibling; // the node after the WHOLE touched range — captured before any moves, since firstNode's own nextSibling could itself be among the nodes removed below
+
+    const listEl = document.createElement(listTag);
+    touched.forEach(n=>{
+      const liEl = document.createElement('li');
+      if(n.nodeType === 3){
+        liEl.appendChild(n); // reparents the text node; existing ranges into it stay valid
+      } else {
+        while(n.firstChild) liEl.appendChild(n.firstChild);
+        if(n.parentNode) n.remove();
+      }
+      if(liEl.textContent.trim()==='') liEl.appendChild(document.createElement('br'));
+      listEl.appendChild(liEl);
+    });
+    parent.insertBefore(listEl, refSibling);
+
+    if(preserveOffset !== null){
+      const r = rangeAtTextOffset(listEl.firstElementChild, preserveOffset);
       sel.removeAllRanges();
       sel.addRange(r);
     } else {
-      const marker = listTag === 'ul' ? '* ' : '1. ';
-      document.execCommand('insertText', false, marker);
-      autoFormatList(pageBodyEl);
+      const lastLi = listEl.lastElementChild;
+      const r = document.createRange();
+      r.selectNodeContents(lastLi);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
     }
     savePage();
   }
@@ -1417,6 +1515,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   function setBlockFormatForCurrentLine(tag){
     const sel = window.getSelection();
     if(!sel.rangeCount) return;
+    const range0 = sel.getRangeAt(0);
     const node = sel.anchorNode;
     const el = node.nodeType===3 ? node.parentElement : node;
     if(el && el.closest && el.closest('li')) return;
@@ -1433,6 +1532,9 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const refEl = isBareText ? node : lineEl;
     const parentNode = refEl.parentNode;
     const nextSibling = refEl.nextSibling;
+    const preserveOffset = sel.isCollapsed
+      ? textOffsetWithin(isBareText ? node : lineEl, range0.startContainer, range0.startOffset)
+      : null;
 
     const newEl = document.createElement(tag);
     if(isBareText){
@@ -1444,11 +1546,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(newEl.textContent.trim()==='') newEl.appendChild(document.createElement('br'));
     parentNode.insertBefore(newEl, nextSibling);
 
-    const r = document.createRange();
-    r.selectNodeContents(newEl);
-    r.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(r);
+    if(preserveOffset !== null){
+      const r = rangeAtTextOffset(newEl, preserveOffset);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } else {
+      const r = document.createRange();
+      r.selectNodeContents(newEl);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
     savePage();
   }
   function insertLinkAtSelection(){
@@ -1636,6 +1744,9 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         const size = prompt('Table size, e.g. "3x4" (rows x columns)', '3x3');
         toolbarPromptOpen = false;
         if(!size) return;
+        // Inserting a table has no "wrap the selection" meaning (unlike Task
+        // or Link) — don't destroy any selected text, insert after it instead.
+        { const sel0 = window.getSelection(); if(sel0.rangeCount && !sel0.isCollapsed) sel0.collapseToEnd(); }
         const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
         const rows = m ? Math.max(1, Math.min(20, parseInt(m[1],10))) : 3;
         const cols = m ? Math.max(1, Math.min(10, parseInt(m[2],10))) : 3;
