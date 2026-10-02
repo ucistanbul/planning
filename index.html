@@ -111,6 +111,7 @@
   .page-title-input{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;border:none;background:none;width:100%;outline:none;margin-bottom:8px;}
   .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
   .page-toolbar button{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 8px;font-size:12px;cursor:pointer;font-family:inherit;}
+  .page-toolbar select{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 6px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--ink);}
   .toolbar-sep{width:1px;height:18px;background:var(--border);margin:0 2px;}
   .user-table{border-collapse:collapse;margin:8px 0;max-width:100%;}
   .user-table td{border:1px solid var(--border);padding:6px 8px;min-width:40px;min-height:20px;vertical-align:top;position:relative;}
@@ -124,6 +125,8 @@
   .row-float-ctrl button, .col-float-ctrl button{width:18px;height:18px;border:none;background:var(--bg);border-radius:4px;font-size:12px;line-height:1;cursor:pointer;color:var(--muted);padding:0;font-family:inherit;}
   .row-float-ctrl button:hover, .col-float-ctrl button:hover{background:var(--accent-soft);color:var(--accent);}
   .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
+  .page-body h2{font-family:'Manrope',sans-serif;font-size:19px;font-weight:700;margin:14px 0 6px;}
+  .page-body h3{font-family:'Manrope',sans-serif;font-size:16px;font-weight:700;margin:12px 0 4px;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
   .page-body a{color:var(--accent);cursor:pointer;}
   .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
@@ -394,6 +397,12 @@
           <div class="page-main">
             <input class="page-title-input" id="pageTitleInput" placeholder="Untitled page">
             <div class="page-toolbar" id="pageToolbar">
+              <select id="pageFormatSelect" title="Text style for the current line">
+                <option value="div">Normal</option>
+                <option value="h2">Heading</option>
+                <option value="h3">Subheading</option>
+              </select>
+              <span class="toolbar-sep"></span>
               <button data-cmd="bold" title="Bold (Cmd+B)"><b>B</b></button>
               <button data-cmd="italic" title="Italic (Cmd+I)"><i>i</i></button>
               <button data-cmd="underline" title="Underline (Cmd+U)"><u>U</u></button>
@@ -623,7 +632,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.7";
+const APP_VERSION = "2026-09-08.8";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1351,6 +1360,97 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       });
     });
   }
+  // Toggles list membership for the CURRENT line only. If the cursor is
+  // already inside an <li> of this list type, removes just that item —
+  // splitting the surrounding list into two separate lists around it, with
+  // the removed line becoming plain text. Otherwise, behaves like typing
+  // "* "/"1. " to start a new list item.
+  function toggleListForCurrentLine(listTag){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return;
+    const node = sel.anchorNode;
+    const el = node.nodeType===3 ? node.parentElement : node;
+    const li = el && el.closest ? el.closest('li') : null;
+    const list = li ? li.closest(listTag) : null;
+    if(li && list && pageBodyEl.contains(list)){
+      const parent = list.parentNode;
+      const itemsBefore = [], itemsAfter = [];
+      let seenCurrent = false;
+      Array.from(list.children).forEach(child=>{
+        if(child === li){ seenCurrent = true; return; }
+        (seenCurrent ? itemsAfter : itemsBefore).push(child);
+      });
+      const plain = document.createElement('div');
+      while(li.firstChild) plain.appendChild(li.firstChild);
+      if(plain.textContent.trim()==='') plain.appendChild(document.createElement('br'));
+
+      const toInsert = [];
+      if(itemsBefore.length){
+        const beforeList = document.createElement(listTag);
+        itemsBefore.forEach(i=>beforeList.appendChild(i));
+        toInsert.push(beforeList);
+      }
+      toInsert.push(plain);
+      if(itemsAfter.length){
+        const afterList = document.createElement(listTag);
+        itemsAfter.forEach(i=>afterList.appendChild(i));
+        toInsert.push(afterList);
+      }
+      toInsert.forEach(elToInsert=>parent.insertBefore(elToInsert, list));
+      parent.removeChild(list);
+
+      const r = document.createRange();
+      r.selectNodeContents(plain);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } else {
+      const marker = listTag === 'ul' ? '* ' : '1. ';
+      document.execCommand('insertText', false, marker);
+      autoFormatList(pageBodyEl);
+    }
+    savePage();
+  }
+  // Sets the block tag (h2/h3/div) for the current line, same line-finding
+  // approach as autoFormatList. Skips list items entirely — headings inside
+  // a bullet point aren't a combination this needs to support.
+  function setBlockFormatForCurrentLine(tag){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return;
+    const node = sel.anchorNode;
+    const el = node.nodeType===3 ? node.parentElement : node;
+    if(el && el.closest && el.closest('li')) return;
+
+    let lineEl = el;
+    let isBareText = false;
+    if(lineEl === pageBodyEl){
+      isBareText = true;
+    } else {
+      while(lineEl.parentElement && lineEl.parentElement !== pageBodyEl) lineEl = lineEl.parentElement;
+      if(lineEl.parentElement !== pageBodyEl) return;
+    }
+
+    const refEl = isBareText ? node : lineEl;
+    const parentNode = refEl.parentNode;
+    const nextSibling = refEl.nextSibling;
+
+    const newEl = document.createElement(tag);
+    if(isBareText){
+      newEl.appendChild(node);
+    } else {
+      while(lineEl.firstChild) newEl.appendChild(lineEl.firstChild);
+      lineEl.remove();
+    }
+    if(newEl.textContent.trim()==='') newEl.appendChild(document.createElement('br'));
+    parentNode.insertBefore(newEl, nextSibling);
+
+    const r = document.createRange();
+    r.selectNodeContents(newEl);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    savePage();
+  }
   function insertLinkAtSelection(){
     pageBodyEl.focus();
     toolbarPromptOpen = true;
@@ -1433,6 +1533,12 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const numberMatch = /^1\.[\u0020\u00A0]$/.test(textBefore);
     if(!bulletMatch && !numberMatch) return;
 
+    // Already inside a list item (e.g. the browser auto-continued the list on
+    // Enter and the user also typed "* " out of habit) — the line-finding
+    // below assumes a direct child of bodyEl, and would otherwise walk all
+    // the way up to the whole <ul> and corrupt it. Just leave the text as-is.
+    if(node.parentElement && node.parentElement.closest && node.parentElement.closest('li')) return;
+
     const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
 
     // Determine "the current line": a block-level element that's a direct
@@ -1475,6 +1581,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   }
 
   let pendingTaskRange = null;
+  $('pageFormatSelect').addEventListener('change', (e)=>{
+    pageBodyEl.focus();
+    setBlockFormatForCurrentLine(e.target.value);
+    e.target.value = 'div';
+  });
   $('pageToolbar').querySelectorAll('button').forEach(btn=>{
     btn.addEventListener('mousedown', e=>e.preventDefault());
     btn.addEventListener('click', async ()=>{
@@ -1500,12 +1611,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
         $('pageTaskModal').classList.remove('hidden');
         $('pageTaskText').focus();
       } else if(cmd==='insertUnorderedList' || cmd==='insertOrderedList'){
-        // Route through the same list-building logic as typing "* "/"1. " —
-        // raw execCommand here had the old cursor-jumps-to-next-line bug.
-        const marker = cmd==='insertUnorderedList' ? '* ' : '1. ';
-        document.execCommand('insertText', false, marker);
-        autoFormatList(pageBodyEl);
-        savePage();
+        toggleListForCurrentLine(cmd==='insertUnorderedList' ? 'ul' : 'ol');
       } else if(cmd==='timestamp'){
         insertTimestamp();
       } else if(cmd==='table'){
