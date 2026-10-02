@@ -632,7 +632,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.8";
+const APP_VERSION = "2026-09-08.9";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1584,8 +1584,24 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   $('pageFormatSelect').addEventListener('change', (e)=>{
     pageBodyEl.focus();
     setBlockFormatForCurrentLine(e.target.value);
-    e.target.value = 'div';
+    // no manual reset — the selectionchange this triggers (via the cursor
+    // placement inside setBlockFormatForCurrentLine) syncs the dropdown to
+    // whatever the line actually is now.
   });
+  function updateFormatSelectForCurrentLine(){
+    const sel = window.getSelection();
+    if(!sel.rangeCount || !pageBodyEl.contains(sel.anchorNode)) return;
+    const node = sel.anchorNode;
+    const el = node.nodeType===3 ? node.parentElement : node;
+    if(el && el.closest && el.closest('li')){ $('pageFormatSelect').value = 'div'; return; }
+    let lineEl = el;
+    if(lineEl !== pageBodyEl){
+      while(lineEl.parentElement && lineEl.parentElement !== pageBodyEl) lineEl = lineEl.parentElement;
+    }
+    const tag = (lineEl && lineEl !== pageBodyEl) ? lineEl.tagName.toLowerCase() : 'div';
+    $('pageFormatSelect').value = (tag==='h2' || tag==='h3') ? tag : 'div';
+  }
+  document.addEventListener('selectionchange', updateFormatSelectForCurrentLine);
   $('pageToolbar').querySelectorAll('button').forEach(btn=>{
     btn.addEventListener('mousedown', e=>e.preventDefault());
     btn.addEventListener('click', async ()=>{
