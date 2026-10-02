@@ -128,6 +128,8 @@
   .page-body h2{font-family:'Manrope',sans-serif;font-size:19px;font-weight:700;margin:14px 0 6px;}
   .page-body h3{font-family:'Manrope',sans-serif;font-size:16px;font-weight:700;margin:12px 0 4px;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
+  .page-body li{min-height:1.6em;}
+  .page-body ul + ul, .page-body ul + ol, .page-body ol + ul, .page-body ol + ol{margin-top:14px;}
   .page-body a{color:var(--accent);cursor:pointer;}
   .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
   .task-link:hover{text-decoration-color:var(--task);}
@@ -632,7 +634,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-09-08.10";
+const APP_VERSION = "2026-10-02.1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1129,6 +1131,25 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     return out.innerHTML;
   }
   pageBodyEl.addEventListener('beforeinput', (e)=>{
+    if(e.inputType !== 'insertParagraph') return;
+    const sel = window.getSelection();
+    if(!sel.rangeCount || !sel.isCollapsed) return;
+    const node = sel.anchorNode;
+    const el = node.nodeType===3 ? node.parentElement : node;
+    const li = el && el.closest ? el.closest('li') : null;
+    if(!li || li.textContent.trim() !== '') return; // only intervene for an already-empty item
+    const list = li.closest('ul, ol');
+    if(!list) return;
+    e.preventDefault();
+    const plain = splitListAtItem(li, list);
+    const r = document.createRange();
+    r.selectNodeContents(plain);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    savePage();
+  });
+  pageBodyEl.addEventListener('beforeinput', (e)=>{
     // Chrome's native delete silently does nothing when a selection spans a
     // <table> that has any contenteditable="false" descendant (our resize
     // handles) — confirmed directly: the table survives untouched, even for
@@ -1414,6 +1435,29 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   // splitting the surrounding list into two separate lists around it, with
   // the removed line becoming plain text. Otherwise, behaves like typing
   // "* "/"1. " to start a new list item.
+  // Removes one <li> from its list, splitting the list around it if needed,
+  // and returns the plain <div> its content became. Shared by the toolbar
+  // toggle-off behavior and by pressing Enter on an empty list item.
+  function splitListAtItem(li, list){
+    const listTag = list.tagName.toLowerCase();
+    const parent = list.parentNode;
+    const itemsBefore = [], itemsAfter = [];
+    let seenCurrent = false;
+    Array.from(list.children).forEach(child=>{
+      if(child === li){ seenCurrent = true; return; }
+      (seenCurrent ? itemsAfter : itemsBefore).push(child);
+    });
+    const plain = document.createElement('div');
+    while(li.firstChild) plain.appendChild(li.firstChild);
+    if(plain.textContent.trim()==='' && !plain.querySelector('br')) plain.appendChild(document.createElement('br'));
+    const toInsert = [];
+    if(itemsBefore.length){ const b=document.createElement(listTag); itemsBefore.forEach(i=>b.appendChild(i)); toInsert.push(b); }
+    toInsert.push(plain);
+    if(itemsAfter.length){ const a=document.createElement(listTag); itemsAfter.forEach(i=>a.appendChild(i)); toInsert.push(a); }
+    toInsert.forEach(e=>parent.insertBefore(e, list));
+    parent.removeChild(list);
+    return plain;
+  }
   function toggleListForCurrentLine(listTag){
     const sel = window.getSelection();
     if(!sel.rangeCount) return;
@@ -1427,22 +1471,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       const li = el && el.closest ? el.closest('li') : null;
       const list = li ? li.closest(listTag) : null;
       if(li && list && pageBodyEl.contains(list)){
-        const parent = list.parentNode;
-        const itemsBefore = [], itemsAfter = [];
-        let seenCurrent = false;
-        Array.from(list.children).forEach(child=>{
-          if(child === li){ seenCurrent = true; return; }
-          (seenCurrent ? itemsAfter : itemsBefore).push(child);
-        });
-        const plain = document.createElement('div');
-        while(li.firstChild) plain.appendChild(li.firstChild);
-        if(plain.textContent.trim()==='') plain.appendChild(document.createElement('br'));
-        const toInsert = [];
-        if(itemsBefore.length){ const b=document.createElement(listTag); itemsBefore.forEach(i=>b.appendChild(i)); toInsert.push(b); }
-        toInsert.push(plain);
-        if(itemsAfter.length){ const a=document.createElement(listTag); itemsAfter.forEach(i=>a.appendChild(i)); toInsert.push(a); }
-        toInsert.forEach(e=>parent.insertBefore(e, list));
-        parent.removeChild(list);
+        const plain = splitListAtItem(li, list);
         const r = document.createRange();
         r.selectNodeContents(plain);
         r.collapse(false);
