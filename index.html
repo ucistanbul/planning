@@ -408,6 +408,10 @@
         <div class="page-detail-layout">
           <div class="page-main">
             <input class="page-title-input" id="pageTitleInput" placeholder="Untitled page">
+            <div id="pageLockedBanner" class="hidden" style="background:#FCE8E6;color:#8A2E22;padding:12px 14px;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:10px;">
+              <strong>This page is view-only for now.</strong> It contains a table and/or task links, which the editor rebuild doesn't support yet — shown below exactly as saved, so nothing is at risk. Editing unlocks automatically once that support is back (coming very soon). Nothing on this page has been changed or lost.
+            </div>
+            <div id="pageBodyReadOnly" class="page-body hidden" style="padding:14px;"></div>
             <div class="page-toolbar" id="pageToolbar">
               <select id="pageFormatSelect" title="Text style for the current line">
                 <option value="div">Normal</option>
@@ -644,7 +648,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-10-03.3-tiptap-stage1";
+const APP_VERSION = "2026-10-03.4-tiptap-stage1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1051,6 +1055,16 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     await sb.from('pages').delete().eq('id', idToDelete);
   });
 
+  // Returns true if this stored HTML contains anything the current TipTap
+  // schema can't represent (tables, task-links) — content that would
+  // otherwise be silently dropped on load and then overwritten for real the
+  // moment anything on the page gets saved. Checked against the RAW stored
+  // HTML, before TipTap ever touches it.
+  function pageHasUnsupportedContent(html){
+    if(!html) return false;
+    return /<table[\s>]/i.test(html) || /class=["']task-link["']/i.test(html);
+  }
+  let currentPageLocked = false;
   function syncPageDetailFromData(force){
     // force=true: an explicit navigation to a specific page (openPage) — must
     // always load that page's real content, no matter what the editor was
@@ -1062,6 +1076,18 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const p = pages.find(x=>x.id===selectedPageId);
     if(!p){ $('pageBackBtn').click(); return; }
     if(document.activeElement !== $('pageTitleInput')) $('pageTitleInput').value = p.title || '';
+
+    currentPageLocked = pageHasUnsupportedContent(p.body || '');
+    $('pageLockedBanner').classList.toggle('hidden', !currentPageLocked);
+    $('pageBodyReadOnly').classList.toggle('hidden', !currentPageLocked);
+    $('pageBody').classList.toggle('hidden', currentPageLocked);
+    $('pageToolbar').classList.toggle('hidden', currentPageLocked);
+    $('pageTitleInput').disabled = currentPageLocked;
+    if(currentPageLocked){
+      $('pageBodyReadOnly').innerHTML = p.body || '';
+      return; // never touch the TipTap editor for locked content — it must never see this HTML at all
+    }
+
     const editor = ensureTiptapEditor();
     if((force || !editor.isFocused) && editor.getHTML() !== (p.body||'')){
       editor.commands.setContent(p.body || '', false);
@@ -1070,8 +1096,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
 
   let pageSaveTimer;
   function savePage(){
+    if(currentPageLocked) return; // absolute guard — a locked page must never be written back
     clearTimeout(pageSaveTimer);
     pageSaveTimer = setTimeout(async ()=>{
+      if(currentPageLocked) return;
       await sb.from('pages').update({
         title: $('pageTitleInput').value,
         body: tiptapEditor ? tiptapEditor.getHTML() : '',
@@ -1085,6 +1113,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     // programmatically remove a marker — without this, an already-in-flight
     // stale save (queued moments earlier, before the removal) can land after
     // the removal and its realtime echo will silently restore the old content.
+    if(currentPageLocked) return; // absolute guard — a locked page must never be written back
     clearTimeout(pageSaveTimer);
     await sb.from('pages').update({
       title: $('pageTitleInput').value,
