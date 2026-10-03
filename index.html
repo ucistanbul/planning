@@ -136,7 +136,7 @@
   .page-body .ProseMirror{font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;}
   .page-body .ProseMirror p{margin:0 0 0.6em;}
   .page-body .ProseMirror p:last-child{margin-bottom:0;}
-  .page-body .ProseMirror table{border-collapse:collapse;table-layout:fixed;width:100%;margin:8px 0;overflow:hidden;}
+  .page-body .ProseMirror table{border-collapse:collapse;table-layout:fixed;width:100%;margin:8px 0;}
   .page-body .ProseMirror table td, .page-body .ProseMirror table th{border:1px solid var(--border);padding:6px 8px;vertical-align:top;position:relative;min-width:25px;}
   .page-body .ProseMirror table th{background:var(--bg);font-weight:700;text-align:left;}
   .page-body .ProseMirror table .selectedCell{background:var(--accent-soft);}
@@ -150,6 +150,7 @@
   .page-body ul + ul, .page-body ul + ol, .page-body ol + ul, .page-body ol + ol{margin-top:14px;}
   .page-body a{color:var(--accent);cursor:pointer;}
   .task-link{color:var(--task);text-decoration:underline;text-decoration-color:var(--task-soft);cursor:pointer;user-select:none;}
+  .task-link.done{color:var(--muted);text-decoration:line-through;opacity:0.65;}
   .task-link:hover{text-decoration-color:var(--task);}
   .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
@@ -661,7 +662,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-10-03.5-tiptap-stage2-3";
+const APP_VERSION = "2026-10-03.6-tiptap-stage2-3";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -869,7 +870,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderAll();
     sb.channel('db-live')
       .on('postgres_changes', { event:'*', schema:'public', table:'todo_lists' }, async ()=>{ await loadTodoLists(); renderTodos(); })
-      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); refreshTaskLinkAppearance(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'pages' }, async ()=>{ await loadPages(); renderPagesList(); renderLatest(); if(selectedPageId && !(tiptapEditor && tiptapEditor.isFocused)) syncPageDetailFromData(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'page_comments' }, async ()=>{ await loadPageComments(); renderPageCommentsPane(); renderLatest(); renderNotifBadge(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'task_comments' }, async ()=>{ await loadTaskComments(); renderTodos(); renderLatest(); renderNotifBadge(); renderPageTasksList(); })
@@ -1111,6 +1112,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if((force || !editor.isFocused) && editor.getHTML() !== (p.body||'')){
       editor.commands.setContent(p.body || '', false);
       establishTaskLinkBaseline();
+      refreshTaskLinkAppearance();
     }
   }
 
@@ -1183,6 +1185,13 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
           return { dom };
         };
       },
+    });
+  }
+  function refreshTaskLinkAppearance(){
+    if(!pageBodyEl) return;
+    pageBodyEl.querySelectorAll('.task-link[data-task-id]').forEach(el=>{
+      const t = todos.find(x=>x.id===el.dataset.taskId);
+      el.classList.toggle('done', !!(t && t.done));
     });
   }
   let knownTaskLinkIds = new Set();
