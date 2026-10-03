@@ -17,8 +17,7 @@
   import { Editor, Node, Extension, InputRule, mergeAttributes } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
   import { TableKit } from '@tiptap/extension-table';
-  import Link from '@tiptap/extension-link';
-  window.TiptapCore = { Editor, StarterKit, TableKit, Node, Extension, InputRule, mergeAttributes, Link };
+  window.TiptapCore = { Editor, StarterKit, TableKit, Node, Extension, InputRule, mergeAttributes };
 </script>
 <script src="config.js"></script>
 <style>
@@ -118,7 +117,8 @@
   /* --- Page detail --- */
   .page-detail-layout{display:flex;flex-direction:column;gap:18px;}
   .page-title-input{font-family:'Manrope',sans-serif;font-size:20px;font-weight:600;border:none;background:none;width:100%;outline:none;margin-bottom:8px;}
-  .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
+  .page-toolbar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:10;background:var(--bg);padding:8px 0;}
+  .page-toolbar.is-stuck{box-shadow:0 2px 6px rgba(0,0,0,0.08);border-bottom:1px solid var(--border);}
   .page-toolbar button{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 8px;font-size:12px;cursor:pointer;font-family:inherit;}
   .page-toolbar select{border:1px solid var(--border);background:var(--surface);border-radius:6px;height:28px;padding:0 6px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--ink);}
   .toolbar-sep{width:1px;height:18px;background:var(--border);margin:0 2px;}
@@ -157,6 +157,10 @@
   .task-link.done{opacity:0.6;text-decoration-line:line-through;}
   .page-side{display:flex;flex-direction:column;gap:20px;}
   .side-block-title{font-family:'Manrope',sans-serif;font-size:14px;margin-bottom:8px;color:var(--muted);}
+  #pageOutlineBlock{position:sticky;top:16px;max-height:70vh;overflow-y:auto;}
+  .outline-item{font-size:13px;padding:5px 8px;border-radius:6px;cursor:pointer;color:var(--ink);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .outline-item:hover{background:var(--bg);}
+  .outline-item.outline-h3{padding-left:20px;font-size:12px;color:var(--muted);}
   .theme-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:14px;}
   .theme-card{background:var(--surface);border:2px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;font-family:inherit;text-align:left;}
   .theme-card.selected{border-color:var(--accent);}
@@ -450,6 +454,10 @@
             <div class="page-body" id="pageBody"></div>
           </div>
           <div class="page-side">
+            <div id="pageOutlineBlock" class="hidden">
+              <div class="side-block-title">Outline</div>
+              <div id="pageOutline"></div>
+            </div>
             <div>
               <div class="side-block-title" style="display:flex;align-items:center;justify-content:space-between;">
                 <span>Tasks in this page</span>
@@ -664,7 +672,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-10-03.7-tiptap-complete";
+const APP_VERSION = "2026-10-03.8-outline-sticky";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -775,6 +783,11 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     if(name==='sched'){ renderGantt(); renderScheduleMonth(); }
   }
   document.querySelectorAll('.nav-tab-btn').forEach(btn=>{ btn.addEventListener('click', ()=>activateTab(btn.dataset.tab)); });
+  window.addEventListener('scroll', ()=>{
+    const toolbar = $('pageToolbar');
+    if(!toolbar || toolbar.classList.contains('hidden')) return;
+    toolbar.classList.toggle('is-stuck', toolbar.getBoundingClientRect().top <= 0);
+  }, { passive: true });
   function flashAndScroll(elId){
     setTimeout(()=>{
       const el = document.getElementById(elId);
@@ -1107,6 +1120,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('pageTitleInput').disabled = currentPageLocked;
     if(currentPageLocked){
       $('pageBodyReadOnly').innerHTML = p.body || '';
+      $('pageOutlineBlock').classList.add('hidden'); // avoid showing a stale outline from whatever page was open before
       return; // never touch the TipTap editor for locked content — it must never see this HTML at all
     }
 
@@ -1115,6 +1129,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       editor.commands.setContent(p.body || '', false);
       establishTaskLinkBaseline();
       refreshTaskLinkAppearance();
+      renderPageOutline();
     }
   }
 
@@ -1237,6 +1252,27 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
       },
     });
   }
+  function renderPageOutline(){
+    const block = $('pageOutlineBlock');
+    const box = $('pageOutline');
+    if(!block || !box || !pageBodyEl) return;
+    const headings = pageBodyEl.querySelectorAll('.ProseMirror h2, .ProseMirror h3');
+    if(headings.length === 0){ block.classList.add('hidden'); return; }
+    block.classList.remove('hidden');
+    box.innerHTML = '';
+    headings.forEach(el=>{
+      const item = document.createElement('div');
+      item.className = 'outline-item outline-' + el.tagName.toLowerCase();
+      item.textContent = el.textContent || '(untitled)';
+      item.title = item.textContent;
+      item.addEventListener('click', ()=>{
+        el.scrollIntoView({behavior:'smooth', block:'center'});
+        el.classList.add('flash-highlight');
+        setTimeout(()=>el.classList.remove('flash-highlight'), 1600);
+      });
+      box.appendChild(item);
+    });
+  }
   function refreshTaskLinkAppearance(){
     if(!pageBodyEl) return;
     pageBodyEl.querySelectorAll('.task-link[data-task-id]').forEach(el=>{
@@ -1267,18 +1303,17 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   }
   function ensureTiptapEditor(){
     if(tiptapEditor) return tiptapEditor;
-    const { Editor, StarterKit, TableKit, Link } = window.TiptapCore;
+    const { Editor, StarterKit, TableKit } = window.TiptapCore;
     tiptapEditor = new Editor({
       element: pageBodyEl,
       extensions: [
-        StarterKit,
+        StarterKit.configure({ link: { openOnClick: false, autolink: true } }), // normal click should place the cursor, not navigate away - handled manually below
         TableKit.configure({ table: { resizable: true } }),
         buildTaskLinkExtension(),
-        Link.configure({ openOnClick: false, autolink: true }), // normal click should place the cursor, not navigate away - handled manually below
         buildAppShortcutsExtension(),
       ],
       content: '',
-      onUpdate: () => { savePage(); syncTaskLinkDeletions(); },
+      onUpdate: () => { savePage(); syncTaskLinkDeletions(); renderPageOutline(); },
       editorProps: {
         handleClick: (view, pos, event) => {
           if(!(event.metaKey || event.ctrlKey)) return false;
