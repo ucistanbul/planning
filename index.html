@@ -11,6 +11,12 @@
   import * as chronoModule from 'https://cdn.jsdelivr.net/npm/chrono-node/+esm';
   window.chrono = chronoModule;
 </script>
+<script type="module">
+  import { Editor } from 'https://cdn.jsdelivr.net/npm/@tiptap/core@3.31.3/+esm';
+  import StarterKit from 'https://cdn.jsdelivr.net/npm/@tiptap/starter-kit@3.31.3/+esm';
+  import Underline from 'https://cdn.jsdelivr.net/npm/@tiptap/extension-underline@3.31.3/+esm';
+  window.TiptapCore = { Editor, StarterKit, Underline };
+</script>
 <script src="config.js"></script>
 <style>
   :root{
@@ -124,7 +130,10 @@
   .row-float-ctrl, .col-float-ctrl{position:absolute;display:none;gap:3px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px;box-shadow:0 2px 6px rgba(0,0,0,0.15);z-index:5;}
   .row-float-ctrl button, .col-float-ctrl button{width:18px;height:18px;border:none;background:var(--bg);border-radius:4px;font-size:12px;line-height:1;cursor:pointer;color:var(--muted);padding:0;font-family:inherit;}
   .row-float-ctrl button:hover, .col-float-ctrl button:hover{background:var(--accent-soft);color:var(--accent);}
-  .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;overflow-wrap:break-word;}
+  .page-body{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);width:100%;overflow-wrap:break-word;}
+  .page-body .ProseMirror{font-size:14px;outline:none;line-height:1.6;min-height:200px;padding:14px;}
+  .page-body .ProseMirror p{margin:0 0 0.6em;}
+  .page-body .ProseMirror p:last-child{margin-bottom:0;}
   .page-body h2{font-family:'Manrope',sans-serif;font-size:19px;font-weight:700;margin:14px 0 6px;}
   .page-body h3{font-family:'Manrope',sans-serif;font-size:16px;font-weight:700;margin:12px 0 4px;}
   .page-body ul, .page-body ol{padding-left:22px;margin:6px 0;}
@@ -412,12 +421,12 @@
               <button data-cmd="insertUnorderedList" title="Bullet list">• List</button>
               <button data-cmd="insertOrderedList" title="Numbered list">1. List</button>
               <span class="toolbar-sep"></span>
-              <button data-cmd="link" title="Add a hyperlink (Cmd+K). Cmd/Ctrl+click a link to open it.">🔗 Link</button>
-              <button data-cmd="task" title="Turn selected text into a task">☐ Task</button>
-              <button data-cmd="timestamp" title="Insert today's date and time. Or just type @now followed by a space, anywhere.">🕐 Date/Time</button>
-              <button data-cmd="table" title="Insert a table">▦ Table</button>
+              <button data-cmd="link" title="Coming back shortly — editor rebuild in progress" disabled style="opacity:0.4;cursor:not-allowed;">🔗 Link</button>
+              <button data-cmd="task" title="Coming back shortly — editor rebuild in progress" disabled style="opacity:0.4;cursor:not-allowed;">☐ Task</button>
+              <button data-cmd="timestamp" title="Coming back shortly — editor rebuild in progress" disabled style="opacity:0.4;cursor:not-allowed;">🕐 Date/Time</button>
+              <button data-cmd="table" title="Coming back shortly — editor rebuild in progress" disabled style="opacity:0.4;cursor:not-allowed;">▦ Table</button>
             </div>
-            <div class="page-body" id="pageBody" contenteditable="true"></div>
+            <div class="page-body" id="pageBody"></div>
           </div>
           <div class="page-side">
             <div>
@@ -634,7 +643,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-10-02.1";
+const APP_VERSION = "2026-10-03.1-tiptap-stage1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -678,7 +687,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
   const GANTT_DAY_PX = 42;
   let selectedDay = null;
   const focusedFields = new Set();
-  let pageBodyFocused = false;
+  // (focus tracking now comes from the TipTap editor instance itself — see tiptapEditor.isFocused)
   let toolbarPromptOpen = false;
 
   const $ = id => document.getElementById(id);
@@ -842,8 +851,8 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderAll();
     sb.channel('db-live')
       .on('postgres_changes', { event:'*', schema:'public', table:'todo_lists' }, async ()=>{ await loadTodoLists(); renderTodos(); })
-      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); refreshTaskMarkers(); })
-      .on('postgres_changes', { event:'*', schema:'public', table:'pages' }, async ()=>{ await loadPages(); renderPagesList(); renderLatest(); if(selectedPageId && !pageBodyFocused) syncPageDetailFromData(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'todos' }, async ()=>{ await loadTodos(); renderTodos(); renderLatest(); renderGantt(); renderScheduleMonth(); renderNotifBadge(); renderPageTasksList(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'pages' }, async ()=>{ await loadPages(); renderPagesList(); renderLatest(); if(selectedPageId && !(tiptapEditor && tiptapEditor.isFocused)) syncPageDetailFromData(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'page_comments' }, async ()=>{ await loadPageComments(); renderPageCommentsPane(); renderLatest(); renderNotifBadge(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'task_comments' }, async ()=>{ await loadTaskComments(); renderTodos(); renderLatest(); renderNotifBadge(); renderPageTasksList(); })
       .on('postgres_changes', { event:'*', schema:'public', table:'page_activity' }, async ()=>{ await loadPageActivity(); renderPageHistory(); })
@@ -1016,9 +1025,9 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     renderPageTasksList();
     renderPageCommentsPane();
     renderPageHistory();
-    refreshTaskMarkers();
-    if(markerCheckInterval) clearInterval(markerCheckInterval);
-    markerCheckInterval = setInterval(syncMarkerDeletions, 1500);
+    // Task-link marker tracking (refreshTaskMarkers/syncMarkerDeletions) is
+    // being rebuilt as a proper TipTap custom node in Stage 2 — intentionally
+    // not called here for now, since the Task button is disabled this stage.
   }
   $('pageTasksHideDone').addEventListener('change', e=>{
     pageTasksHideDone = e.target.checked;
@@ -1046,8 +1055,10 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     const p = pages.find(x=>x.id===selectedPageId);
     if(!p){ $('pageBackBtn').click(); return; }
     if(document.activeElement !== $('pageTitleInput')) $('pageTitleInput').value = p.title || '';
-    if(!pageBodyFocused && $('pageBody').innerHTML !== (p.body||'')){ $('pageBody').innerHTML = p.body || ''; attachTableResizeHandles($('pageBody')); }
-    establishMarkerBaseline();
+    const editor = ensureTiptapEditor();
+    if(!editor.isFocused && editor.getHTML() !== (p.body||'') && !(p.body==='' && editor.isEmpty)){
+      editor.commands.setContent(p.body || '', false);
+    }
   }
 
   let pageSaveTimer;
@@ -1056,7 +1067,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     pageSaveTimer = setTimeout(async ()=>{
       await sb.from('pages').update({
         title: $('pageTitleInput').value,
-        body: $('pageBody').innerHTML,
+        body: tiptapEditor ? tiptapEditor.getHTML() : '',
         updated_by: myName, updated_at: new Date().toISOString()
       }).eq('id', selectedPageId);
       logPageEdit(selectedPageId);
@@ -1070,729 +1081,57 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     clearTimeout(pageSaveTimer);
     await sb.from('pages').update({
       title: $('pageTitleInput').value,
-      body: $('pageBody').innerHTML,
+      body: tiptapEditor ? tiptapEditor.getHTML() : '',
       updated_by: myName, updated_at: new Date().toISOString()
     }).eq('id', selectedPageId);
   }
   $('pageTitleInput').addEventListener('input', savePage);
   const pageBodyEl = $('pageBody');
-  // Sanitizes pasted HTML: keeps basic formatting, real hyperlinks, and our
-  // own task-links; strips everything else (scripts, styles, images, random
-  // classes/inline styles from whatever site/app it was copied from) down to
-  // plain text. Built on the DOM rather than regex for correctness.
-  function sanitizePastedHtml(rawHtml){
-    const allowedTags = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, UL:1, OL:1, LI:1, BR:1, P:1, DIV:1, SPAN:1, TABLE:1, TBODY:1, THEAD:1, TR:1, TD:1, TH:1 };
-    const src = document.createElement('div');
-    src.innerHTML = rawHtml;
-    src.querySelectorAll('script,style,meta,link,iframe,object,embed,svg,img,video,audio,form,input,button,noscript').forEach(el=>el.remove());
-
-    function cleanChildren(node){
-      const frag = document.createDocumentFragment();
-      node.childNodes.forEach(child=>{
-        if(child.nodeType === Node.TEXT_NODE){ frag.appendChild(child.cloneNode()); return; }
-        if(child.nodeType !== Node.ELEMENT_NODE) return; // drop comments etc.
-        const tag = child.tagName;
-        const innerCleaned = cleanChildren(child); // clean children first regardless of what happens to this node
-        if(!allowedTags[tag]){ frag.appendChild(innerCleaned); return; } // unwrap: keep content, drop the wrapper
-        if(tag === 'A'){
-          const isTaskLink = child.classList.contains('task-link') && child.dataset.taskId;
-          if(isTaskLink){
-            const el = document.createElement('a');
-            el.className = 'task-link';
-            el.setAttribute('contenteditable','false');
-            el.dataset.taskId = child.dataset.taskId;
-            if(child.title) el.title = child.title;
-            el.appendChild(innerCleaned);
-            frag.appendChild(el);
-            return;
-          }
-          const href = child.getAttribute('href') || '';
-          if(/^(https?:|mailto:)/i.test(href)){
-            const el = document.createElement('a');
-            el.setAttribute('href', href);
-            el.setAttribute('target','_blank');
-            el.setAttribute('rel','noopener');
-            el.appendChild(innerCleaned);
-            frag.appendChild(el);
-            return;
-          }
-          frag.appendChild(innerCleaned); // no safe href and not a task-link — just unwrap
-          return;
-        }
-        const el = document.createElement(tag.toLowerCase());
-        if(tag === 'TABLE' && child.classList.contains('user-table')) el.className = 'user-table';
-        el.appendChild(innerCleaned);
-        frag.appendChild(el);
-      });
-      return frag;
-    }
-    const out = document.createElement('div');
-    out.appendChild(cleanChildren(src));
-    return out.innerHTML;
-  }
-  pageBodyEl.addEventListener('beforeinput', (e)=>{
-    if(e.inputType !== 'insertParagraph') return;
-    const sel = window.getSelection();
-    if(!sel.rangeCount || !sel.isCollapsed) return;
-    const node = sel.anchorNode;
-    const el = node.nodeType===3 ? node.parentElement : node;
-    const li = el && el.closest ? el.closest('li') : null;
-    if(!li || li.textContent.trim() !== '') return; // only intervene for an already-empty item
-    const list = li.closest('ul, ol');
-    if(!list) return;
-    e.preventDefault();
-    const plain = splitListAtItem(li, list);
-    const r = document.createRange();
-    r.selectNodeContents(plain);
-    r.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(r);
-    savePage();
-  });
-  pageBodyEl.addEventListener('beforeinput', (e)=>{
-    // Chrome's native delete silently does nothing when a selection spans a
-    // <table> that has any contenteditable="false" descendant (our resize
-    // handles) — confirmed directly: the table survives untouched, even for
-    // a full select-all. Range.deleteContents() called from JS handles this
-    // correctly where the native keyboard path doesn't, so we do it
-    // ourselves specifically when a table is actually involved.
-    if(!['deleteContentBackward','deleteContentForward','deleteByCut'].includes(e.inputType)) return;
-    const sel = window.getSelection();
-    if(!sel.rangeCount || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-    const ancestorEl = range.commonAncestorContainer.nodeType===3 ? range.commonAncestorContainer.parentElement : range.commonAncestorContainer;
-    const withinListOrTable = ancestorEl && ancestorEl.closest && ancestorEl.closest('li, ul, ol, table.user-table');
-    if(!withinListOrTable && !range.cloneContents().querySelector('table.user-table, ul, ol, li')) return;
-    e.preventDefault();
-    range.deleteContents();
-    let cursorNode = range.startContainer, cursorOffset = range.startOffset;
-    function removeIfEmpty(w, isEmpty){
-      if(!isEmpty(w)) return;
-      if(w === cursorNode || w.contains(cursorNode)){
-        // cursor would be left inside the element we're about to remove —
-        // move it to just before it instead, using its parent as anchor.
-        cursorOffset = Array.from(w.parentNode.childNodes).indexOf(w);
-        cursorNode = w.parentNode;
-      }
-      w.remove();
-    }
-    pageBodyEl.querySelectorAll('.table-wrap').forEach(w=>removeIfEmpty(w, el=>!el.querySelector('table')));
-    pageBodyEl.querySelectorAll('ul, ol').forEach(w=>removeIfEmpty(w, el=>el.textContent.trim()===''));
-    const maxOffset = cursorNode.nodeType===3 ? cursorNode.textContent.length : cursorNode.childNodes.length;
-    const newRange = document.createRange();
-    newRange.setStart(cursorNode, Math.min(cursorOffset, maxOffset));
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-    savePage();
-    syncMarkerDeletions();
-  });
-  pageBodyEl.addEventListener('paste', (e)=>{
-    e.preventDefault();
-    const cd = e.clipboardData || window.clipboardData;
-    const html = cd.getData('text/html');
-    if(html && html.trim()){
-      document.execCommand('insertHTML', false, sanitizePastedHtml(html));
-      attachTableResizeHandles(pageBodyEl);
-    } else {
-      document.execCommand('insertText', false, cd.getData('text/plain'));
-    }
-  });
-  pageBodyEl.addEventListener('click', (e)=>{
-    const link = e.target.closest('a.task-link');
-    if(link && link.dataset.taskId){
-      editingTaskId = link.dataset.taskId;
-      renderPageTasksList();
-      flashAndScroll('side-todo-'+link.dataset.taskId);
-      // A click on an atomic element can leave the cursor ambiguously on
-      // either side of it — force a known position right after, so a
-      // follow-up Backspace unambiguously targets the marker.
-      const r = document.createRange();
-      r.setStartAfter(link);
-      r.collapse(true);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(r);
-      return;
-    }
-    const realLink = e.target.closest('a');
-    if(realLink && (e.metaKey || e.ctrlKey)){
-      e.preventDefault();
-      window.open(realLink.href, '_blank', 'noopener');
-    }
-  });
-  pageBodyEl.addEventListener('focus', ()=>pageBodyFocused = true);
-  pageBodyEl.addEventListener('blur', ()=>{ pageBodyFocused = false; });
-  function checkTimestampTrigger(){
-    const sel = window.getSelection();
-    if(!sel.rangeCount) return;
-    const node = sel.anchorNode;
-    if(!node || node.nodeType !== 3) return;
-    const offset = sel.anchorOffset;
-    const textBefore = node.textContent.slice(0, offset);
-    if(/@now[\u0020\u00A0]$/i.test(textBefore)){
-      const r = document.createRange();
-      r.setStart(node, offset-5);
-      r.setEnd(node, offset-1); // delete just "@now", leave the trailing space in place
-      r.deleteContents();
-      const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
-      document.execCommand('insertText', false, stamp);
-    }
-  }
-  pageBodyEl.addEventListener('input', ()=>{ autoFormatList(pageBodyEl); checkTimestampTrigger(); savePage(); syncMarkerDeletions(); });
-  pageBodyEl.addEventListener('keyup', e=>{
-    if(e.key==='Backspace' || e.key==='Delete') syncMarkerDeletions();
-  });
-  // cloneRange() does not reliably track a position through node reparenting
-  // (confirmed directly) — these compute/restore position as a plain
-  // character count instead, which is unaffected by how the DOM gets
-  // restructured in between, as long as the text content itself is preserved.
-  function textOffsetWithin(root, node, offset){
-    if(root.nodeType === 3) return offset; // root IS the text node itself
-    let total = 0;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let current;
-    while(current = walker.nextNode()){
-      if(current === node) return total + offset;
-      total += current.textContent.length;
-    }
-    return total;
-  }
-  function rangeAtTextOffset(root, targetOffset){
-    const r = document.createRange();
-    if(root.nodeType === 3){
-      r.setStart(root, Math.min(targetOffset, root.textContent.length));
-      r.collapse(true);
-      return r;
-    }
-    let total = 0;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let current;
-    while(current = walker.nextNode()){
-      const len = current.textContent.length;
-      if(total + len >= targetOffset){
-        r.setStart(current, targetOffset - total);
-        r.collapse(true);
-        return r;
-      }
-      total += len;
-    }
-    r.selectNodeContents(root);
-    r.collapse(false);
-    return r;
-  }
-  function insertTimestamp(){
-    pageBodyEl.focus();
-    // If text happens to be selected, don't destroy it — add the timestamp
-    // right after instead of replacing whatever was selected.
-    const sel = window.getSelection();
-    if(sel.rangeCount && !sel.isCollapsed){
-      sel.collapseToEnd();
-    }
-    const stamp = new Date().toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
-    document.execCommand('insertText', false, stamp);
-    savePage();
-  }
-  // Attaches drag-to-resize handles to every table in the given root. Safe to
-  // call repeatedly on the same content — reuses existing handle elements
-  // rather than stacking duplicates, since event listeners don't survive an
-  // innerHTML reassignment (e.g. when realtime sync refreshes the page body)
-  // and need reattaching every time regardless.
-  function attachTableResizeHandles(root){
-    root.querySelectorAll('table.user-table').forEach(table=>{
-      // Migrate away from the old persistent +Row/+Column buttons (earlier
-      // version) if a table saved with them gets loaded.
-      const oldControls = table.nextElementSibling;
-      if(oldControls && oldControls.classList && oldControls.classList.contains('table-controls')) oldControls.remove();
-
-      // Wrap the table so the floating hover controls have a stable
-      // positioning context, whether this table was just inserted or is an
-      // older one loaded without a wrapper.
-      let wrap = table.parentElement;
-      if(!wrap.classList || !wrap.classList.contains('table-wrap')){
-        wrap = document.createElement('div');
-        wrap.className = 'table-wrap';
-        table.parentNode.insertBefore(wrap, table);
-        wrap.appendChild(table);
-      }
-
-      let rowCtrl = wrap.querySelector(':scope > .row-float-ctrl');
-      if(!rowCtrl){
-        rowCtrl = document.createElement('div');
-        rowCtrl.className = 'row-float-ctrl';
-        rowCtrl.contentEditable = 'false';
-        rowCtrl.innerHTML = '<button class="rf-add" type="button" title="Insert row below">+</button><button class="rf-del" type="button" title="Delete this row">−</button>';
-        wrap.appendChild(rowCtrl);
-      }
-      let colCtrl = wrap.querySelector(':scope > .col-float-ctrl');
-      if(!colCtrl){
-        colCtrl = document.createElement('div');
-        colCtrl.className = 'col-float-ctrl';
-        colCtrl.contentEditable = 'false';
-        colCtrl.innerHTML = '<button class="cf-add" type="button" title="Insert column after">+</button><button class="cf-del" type="button" title="Delete this column">−</button>';
-        wrap.appendChild(colCtrl);
-      }
-
-      let hoverRowIdx = null, hoverColIdx = null, hideTimer = null;
-      function showCtrls(){ clearTimeout(hideTimer); rowCtrl.style.display='flex'; colCtrl.style.display='flex'; }
-      function scheduleHide(){ hideTimer = setTimeout(()=>{ rowCtrl.style.display='none'; colCtrl.style.display='none'; }, 300); }
-      wrap.onmousemove = (e)=>{
-        const cell = e.target.closest('td');
-        if(!cell || !table.contains(cell)) return;
-        const row = cell.parentElement;
-        hoverRowIdx = Array.from(table.rows).indexOf(row);
-        hoverColIdx = Array.from(row.cells).indexOf(cell);
-        const wrapRect = wrap.getBoundingClientRect();
-        const rowRect = row.getBoundingClientRect();
-        const cellRect = cell.getBoundingClientRect();
-        rowCtrl.style.top = (rowRect.top - wrapRect.top + rowRect.height/2 - 11) + 'px';
-        rowCtrl.style.left = '-38px';
-        colCtrl.style.left = (cellRect.left - wrapRect.left + cellRect.width/2 - 22) + 'px';
-        colCtrl.style.top = '-30px';
-        showCtrls();
-      };
-      wrap.onmouseleave = scheduleHide;
-      [rowCtrl, colCtrl].forEach(c=>{ c.onmouseenter = ()=>clearTimeout(hideTimer); c.onmouseleave = scheduleHide; });
-
-      rowCtrl.querySelector('.rf-add').onclick = ()=>{
-        if(hoverRowIdx==null) return;
-        const cols = table.rows[0] ? table.rows[0].cells.length : 1;
-        const tr = document.createElement('tr');
-        for(let i=0;i<cols;i++) tr.appendChild(document.createElement('td')).innerHTML = '<br>';
-        table.rows[hoverRowIdx].after(tr);
-        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
-      };
-      rowCtrl.querySelector('.rf-del').onclick = ()=>{
-        if(hoverRowIdx==null || table.rows.length<=1) return;
-        table.deleteRow(hoverRowIdx);
-        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
-      };
-      colCtrl.querySelector('.cf-add').onclick = ()=>{
-        if(hoverColIdx==null) return;
-        Array.from(table.rows).forEach(row=>{
-          const td = document.createElement('td'); td.innerHTML = '<br>';
-          row.cells[hoverColIdx].after(td);
-        });
-        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
-      };
-      colCtrl.querySelector('.cf-del').onclick = ()=>{
-        if(hoverColIdx==null || table.rows[0].cells.length<=1) return;
-        Array.from(table.rows).forEach(row=>{ if(row.cells[hoverColIdx]) row.deleteCell(hoverColIdx); });
-        attachTableResizeHandles(root); savePage(); pageBodyEl.focus();
-      };
-
-      const firstRow = table.rows[0];
-      if(firstRow){
-        Array.from(firstRow.cells).forEach((cell, colIdx)=>{
-          let handle = cell.querySelector(':scope > .col-resize-handle');
-          if(!handle){
-            handle = document.createElement('span');
-            handle.className = 'col-resize-handle';
-            handle.contentEditable = 'false';
-            cell.appendChild(handle);
-          }
-          handle.onmousedown = (e)=>{
-            e.preventDefault(); e.stopPropagation();
-            const startX = e.clientX;
-            const startWidth = cell.offsetWidth;
-            function onMove(e2){
-              const newWidth = Math.max(40, startWidth + (e2.clientX - startX));
-              Array.from(table.rows).forEach(row=>{ if(row.cells[colIdx]) row.cells[colIdx].style.width = newWidth+'px'; });
-            }
-            function onUp(){ document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); savePage(); }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          };
-        });
-      }
-      Array.from(table.rows).forEach(row=>{
-        const cell = row.cells[0];
-        if(!cell) return;
-        let handle = cell.querySelector(':scope > .row-resize-handle');
-        if(!handle){
-          handle = document.createElement('span');
-          handle.className = 'row-resize-handle';
-          handle.contentEditable = 'false';
-          cell.appendChild(handle);
-        }
-        handle.onmousedown = (e)=>{
-          e.preventDefault(); e.stopPropagation();
-          const startY = e.clientY;
-          const startHeight = row.offsetHeight;
-          function onMove(e2){
-            const newHeight = Math.max(24, startHeight + (e2.clientY - startY));
-            Array.from(row.cells).forEach(c=>{ c.style.height = newHeight+'px'; });
-          }
-          function onUp(){ document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); savePage(); }
-          document.addEventListener('mousemove', onMove);
-          document.addEventListener('mouseup', onUp);
-        };
-      });
+  let tiptapEditor = null;
+  // Lazily creates the TipTap editor instance the first time a page is
+  // opened — window.TiptapCore is populated by a deferred module script, so
+  // this must not be called at top-level script execution time, only from
+  // inside functions triggered by later user interaction (same pattern
+  // already used for window.chrono in this file).
+  function ensureTiptapEditor(){
+    if(tiptapEditor) return tiptapEditor;
+    const { Editor, StarterKit, Underline } = window.TiptapCore;
+    tiptapEditor = new Editor({
+      element: pageBodyEl,
+      extensions: [StarterKit, Underline],
+      content: '',
+      onUpdate: () => { savePage(); },
     });
+    tiptapEditor.on('selectionUpdate', updateFormatSelectFromEditor);
+    tiptapEditor.on('transaction', updateFormatSelectFromEditor);
+    return tiptapEditor;
   }
-  // Toggles list membership for the CURRENT line only. If the cursor is
-  // already inside an <li> of this list type, removes just that item —
-  // splitting the surrounding list into two separate lists around it, with
-  // the removed line becoming plain text. Otherwise, behaves like typing
-  // "* "/"1. " to start a new list item.
-  // Removes one <li> from its list, splitting the list around it if needed,
-  // and returns the plain <div> its content became. Shared by the toolbar
-  // toggle-off behavior and by pressing Enter on an empty list item.
-  function splitListAtItem(li, list){
-    const listTag = list.tagName.toLowerCase();
-    const parent = list.parentNode;
-    const itemsBefore = [], itemsAfter = [];
-    let seenCurrent = false;
-    Array.from(list.children).forEach(child=>{
-      if(child === li){ seenCurrent = true; return; }
-      (seenCurrent ? itemsAfter : itemsBefore).push(child);
-    });
-    const plain = document.createElement('div');
-    while(li.firstChild) plain.appendChild(li.firstChild);
-    if(plain.textContent.trim()==='' && !plain.querySelector('br')) plain.appendChild(document.createElement('br'));
-    const toInsert = [];
-    if(itemsBefore.length){ const b=document.createElement(listTag); itemsBefore.forEach(i=>b.appendChild(i)); toInsert.push(b); }
-    toInsert.push(plain);
-    if(itemsAfter.length){ const a=document.createElement(listTag); itemsAfter.forEach(i=>a.appendChild(i)); toInsert.push(a); }
-    toInsert.forEach(e=>parent.insertBefore(e, list));
-    parent.removeChild(list);
-    return plain;
+  function updateFormatSelectFromEditor(){
+    if(!tiptapEditor) return;
+    const sel = $('pageFormatSelect');
+    if(tiptapEditor.isActive('heading', { level: 2 })) sel.value = 'h2';
+    else if(tiptapEditor.isActive('heading', { level: 3 })) sel.value = 'h3';
+    else sel.value = 'div';
   }
-  function toggleListForCurrentLine(listTag){
-    const sel = window.getSelection();
-    if(!sel.rangeCount) return;
-    const range = sel.getRangeAt(0);
-
-    // Case 1: cursor (collapsed) is already inside an <li> of this exact list
-    // type — toggle it off, splitting the surrounding list around it.
-    if(sel.isCollapsed){
-      const node = sel.anchorNode;
-      const el = node.nodeType===3 ? node.parentElement : node;
-      const li = el && el.closest ? el.closest('li') : null;
-      const list = li ? li.closest(listTag) : null;
-      if(li && list && pageBodyEl.contains(list)){
-        const plain = splitListAtItem(li, list);
-        const r = document.createRange();
-        r.selectNodeContents(plain);
-        r.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(r);
-        savePage();
-        return;
-      }
-    }
-
-    // Case 2: convert every top-level line the selection touches into list
-    // items of one shared list. For a collapsed cursor this is just the one
-    // line it's in — regardless of where in that line the cursor sits. For a
-    // real selection (possibly spanning several lines), every line gets
-    // converted, and the original text is always preserved, never replaced.
-    const topNodes = Array.from(pageBodyEl.childNodes);
-    let touched = topNodes.filter(n => range.intersectsNode(n));
-    if(touched.length === 0){
-      let el = sel.anchorNode.nodeType===3 ? sel.anchorNode.parentElement : sel.anchorNode;
-      if(el === pageBodyEl){ touched = [sel.anchorNode]; }
-      else {
-        while(el && el.parentElement && el.parentElement !== pageBodyEl) el = el.parentElement;
-        if(el && el.parentElement === pageBodyEl) touched = [el];
-      }
-    }
-    touched = touched.filter(n => !(n.nodeType===3 && n.textContent.trim()===''));
-    if(touched.length === 0) return;
-
-    // For the common single-line, collapsed-cursor case, preserve the exact
-    // cursor position as a character offset within that line's text.
-    const firstNode = touched[0];
-    const preserveOffset = (touched.length===1 && sel.isCollapsed)
-      ? textOffsetWithin(firstNode, range.startContainer, range.startOffset)
-      : null;
-    const lastNode = touched[touched.length-1];
-    const parent = firstNode.parentNode;
-    const refSibling = lastNode.nextSibling; // the node after the WHOLE touched range — captured before any moves, since firstNode's own nextSibling could itself be among the nodes removed below
-
-    const listEl = document.createElement(listTag);
-    touched.forEach(n=>{
-      const liEl = document.createElement('li');
-      if(n.nodeType === 3){
-        liEl.appendChild(n); // reparents the text node; existing ranges into it stay valid
-      } else {
-        while(n.firstChild) liEl.appendChild(n.firstChild);
-        if(n.parentNode) n.remove();
-      }
-      if(liEl.textContent.trim()==='') liEl.appendChild(document.createElement('br'));
-      listEl.appendChild(liEl);
-    });
-    parent.insertBefore(listEl, refSibling);
-
-    if(preserveOffset !== null){
-      const r = rangeAtTextOffset(listEl.firstElementChild, preserveOffset);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    } else {
-      const lastLi = listEl.lastElementChild;
-      const r = document.createRange();
-      r.selectNodeContents(lastLi);
-      r.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    }
-    savePage();
-  }
-  // Sets the block tag (h2/h3/div) for the current line, same line-finding
-  // approach as autoFormatList. Skips list items entirely — headings inside
-  // a bullet point aren't a combination this needs to support.
-  function setBlockFormatForCurrentLine(tag){
-    const sel = window.getSelection();
-    if(!sel.rangeCount) return;
-    const range0 = sel.getRangeAt(0);
-    const node = sel.anchorNode;
-    const el = node.nodeType===3 ? node.parentElement : node;
-    if(el && el.closest && el.closest('li')) return;
-
-    let lineEl = el;
-    let isBareText = false;
-    if(lineEl === pageBodyEl){
-      isBareText = true;
-    } else {
-      while(lineEl.parentElement && lineEl.parentElement !== pageBodyEl) lineEl = lineEl.parentElement;
-      if(lineEl.parentElement !== pageBodyEl) return;
-    }
-
-    const refEl = isBareText ? node : lineEl;
-    const parentNode = refEl.parentNode;
-    const nextSibling = refEl.nextSibling;
-    const preserveOffset = sel.isCollapsed
-      ? textOffsetWithin(isBareText ? node : lineEl, range0.startContainer, range0.startOffset)
-      : null;
-
-    const newEl = document.createElement(tag);
-    if(isBareText){
-      newEl.appendChild(node);
-    } else {
-      while(lineEl.firstChild) newEl.appendChild(lineEl.firstChild);
-      lineEl.remove();
-    }
-    if(newEl.textContent.trim()==='') newEl.appendChild(document.createElement('br'));
-    parentNode.insertBefore(newEl, nextSibling);
-
-    if(preserveOffset !== null){
-      const r = rangeAtTextOffset(newEl, preserveOffset);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    } else {
-      const r = document.createRange();
-      r.selectNodeContents(newEl);
-      r.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    }
-    savePage();
-  }
-  function insertLinkAtSelection(){
-    pageBodyEl.focus();
-    toolbarPromptOpen = true;
-    const url = prompt('Link URL (include https://)');
-    toolbarPromptOpen = false;
-    if(url) document.execCommand('createLink', false, url);
-    savePage();
-  }
-
-  pageBodyEl.addEventListener('keydown', e=>{
-    const mod = e.metaKey || e.ctrlKey;
-    if(mod && e.key.toLowerCase()==='b'){ e.preventDefault(); document.execCommand('bold'); savePage(); return; }
-    if(mod && e.key.toLowerCase()==='i'){ e.preventDefault(); document.execCommand('italic'); savePage(); return; }
-    if(mod && e.key.toLowerCase()==='u'){ e.preventDefault(); document.execCommand('underline'); savePage(); return; }
-    if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); insertLinkAtSelection(); return; }
-    if(mod && e.key===';'){ e.preventDefault(); insertTimestamp(); return; }
-    if(mod && e.key===']'){ e.preventDefault(); document.execCommand('indent'); savePage(); return; }
-    if(mod && e.key==='['){ e.preventDefault(); document.execCommand('outdent'); savePage(); return; }
-  });
-
-  // Simple, robust approach: track which task-link ids exist before an edit,
-  // compare to what exists after. Anything that vanished had its task deleted.
-  // No need to reason about exactly how the browser performed the deletion.
-  let knownMarkerIds = new Set();
-  function scanMarkerIds(){
-    return new Set(Array.from(pageBodyEl.querySelectorAll('.task-link')).map(s=>s.dataset.taskId).filter(Boolean));
-  }
-  function establishMarkerBaseline(){ knownMarkerIds = scanMarkerIds(); }
-  function syncMarkerDeletions(){
-    const current = scanMarkerIds();
-    knownMarkerIds.forEach(id=>{
-      if(!current.has(id)){
-        const existing = todos.find(x=>x.id===id);
-        if(existing && existing.page_id) sb.from('page_activity').insert({ page_id: existing.page_id, actor: myName, action: `removed the task "${existing.text}"` });
-        sb.from('todos').delete().eq('id', id);
-      }
-    });
-    knownMarkerIds = current;
-  }
-  async function refreshTaskMarkers(){
-    if(!selectedPageId) return;
-    let removedAny = false;
-    const checks = [];
-    pageBodyEl.querySelectorAll('.task-link').forEach(link=>{
-      const taskId = link.dataset.taskId;
-      const t = todos.find(x=>x.id===taskId);
-      if(!t){
-        // Not in the local cache — could mean genuinely deleted, or could mean
-        // it just hasn't propagated here yet. Don't guess based on elapsed time;
-        // ask the server directly.
-        checks.push(
-          sb.from('todos').select('id').eq('id', taskId).then(({data})=>{
-            if(!data || data.length===0){
-              // Task is confirmed gone — unwrap the link, keeping its words as
-              // plain text rather than leaving a dead, clickable link behind.
-              const parent = link.parentNode;
-              while(link.firstChild) parent.insertBefore(link.firstChild, link);
-              parent.removeChild(link);
-              removedAny = true;
-            }
-          })
-        );
-        return;
-      }
-      link.classList.toggle('done', !!t.done);
-      link.title = (t.done ? 'Done · ' : '') + 'Click to view in Tasks';
-    });
-    if(checks.length) await Promise.all(checks);
-    if(removedAny){ await savePageImmediate(); establishMarkerBaseline(); }
-  }
-
-  function autoFormatList(bodyEl){
-    const sel = window.getSelection();
-    if(!sel.rangeCount) return;
-    const node = sel.anchorNode;
-    if(!node || node.nodeType !== 3) return;
-    const offset = sel.anchorOffset;
-    const textBefore = node.textContent.slice(0, offset);
-    const bulletMatch = /^\*[\u0020\u00A0]$/.test(textBefore);
-    const numberMatch = /^1\.[\u0020\u00A0]$/.test(textBefore);
-    if(!bulletMatch && !numberMatch) return;
-
-    // Already inside a list item (e.g. the browser auto-continued the list on
-    // Enter and the user also typed "* " out of habit) — the line-finding
-    // below assumes a direct child of bodyEl, and would otherwise walk all
-    // the way up to the whole <ul> and corrupt it. Just leave the text as-is.
-    if(node.parentElement && node.parentElement.closest && node.parentElement.closest('li')) return;
-
-    const r = document.createRange(); r.setStart(node,0); r.setEnd(node,offset); r.deleteContents();
-
-    // Determine "the current line": a block-level element that's a direct
-    // child of bodyEl, or — if the text sits bare directly in bodyEl with no
-    // wrapper div — the text node itself.
-    let lineEl = node.parentElement;
-    let isBareText = false;
-    if(lineEl === bodyEl){
-      isBareText = true;
-    } else {
-      while(lineEl.parentElement && lineEl.parentElement !== bodyEl) lineEl = lineEl.parentElement;
-      if(lineEl.parentElement !== bodyEl) return; // unexpected structure — bail out safely, no auto-format
-    }
-
-    const listTag = bulletMatch ? 'ul' : 'ol';
-    const refEl = isBareText ? node : lineEl;
-    const prevEl = refEl.previousSibling;
-    let listEl = (prevEl && prevEl.nodeType===1 && prevEl.tagName.toLowerCase()===listTag) ? prevEl : null;
-    if(!listEl){
-      listEl = document.createElement(listTag);
-      refEl.parentNode.insertBefore(listEl, refEl);
-    }
-    const li = document.createElement('li');
-    if(isBareText){
-      li.appendChild(node);
-    } else {
-      while(lineEl.firstChild) li.appendChild(lineEl.firstChild);
-      lineEl.remove();
-    }
-    if(li.textContent.trim()===''){
-      li.appendChild(document.createElement('br')); // keep an empty item focusable
-    }
-    listEl.appendChild(li);
-
-    const newRange = document.createRange();
-    newRange.selectNodeContents(li);
-    newRange.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-  }
-
-  let pendingTaskRange = null;
   $('pageFormatSelect').addEventListener('change', (e)=>{
-    pageBodyEl.focus();
-    setBlockFormatForCurrentLine(e.target.value);
-    // no manual reset — the selectionchange this triggers (via the cursor
-    // placement inside setBlockFormatForCurrentLine) syncs the dropdown to
-    // whatever the line actually is now.
+    if(!tiptapEditor) return;
+    const val = e.target.value;
+    const chain = tiptapEditor.chain().focus();
+    if(val === 'h2') chain.toggleHeading({ level: 2 }).run();
+    else if(val === 'h3') chain.toggleHeading({ level: 3 }).run();
+    else chain.setParagraph().run();
   });
-  function updateFormatSelectForCurrentLine(){
-    const sel = window.getSelection();
-    if(!sel.rangeCount || !pageBodyEl.contains(sel.anchorNode)) return;
-    const node = sel.anchorNode;
-    const el = node.nodeType===3 ? node.parentElement : node;
-    if(el && el.closest && el.closest('li')){ $('pageFormatSelect').value = 'div'; return; }
-    let lineEl = el;
-    if(lineEl !== pageBodyEl){
-      while(lineEl.parentElement && lineEl.parentElement !== pageBodyEl) lineEl = lineEl.parentElement;
-    }
-    const tag = (lineEl && lineEl !== pageBodyEl) ? lineEl.tagName.toLowerCase() : 'div';
-    $('pageFormatSelect').value = (tag==='h2' || tag==='h3') ? tag : 'div';
-  }
-  document.addEventListener('selectionchange', updateFormatSelectForCurrentLine);
-  $('pageToolbar').querySelectorAll('button').forEach(btn=>{
+  $('pageToolbar').querySelectorAll('button:not([disabled])').forEach(btn=>{
     btn.addEventListener('mousedown', e=>e.preventDefault());
-    btn.addEventListener('click', async ()=>{
-      pageBodyEl.focus();
+    btn.addEventListener('click', ()=>{
+      if(!tiptapEditor) return;
       const cmd = btn.dataset.cmd;
-      if(cmd==='link'){
-        insertLinkAtSelection();
-      } else if(cmd==='task'){
-        const sel = window.getSelection();
-        let savedRange = null, defaultText = '';
-        if(sel && sel.rangeCount && !sel.isCollapsed && pageBodyEl.contains(sel.anchorNode)){
-          savedRange = sel.getRangeAt(0).cloneRange();
-          defaultText = sel.toString();
-        }
-        pendingTaskRange = savedRange;
-        $('pageTaskText').value = defaultText;
-        const foundDate = extractDateFromText(defaultText);
-        $('pageTaskDate').value = foundDate || '';
-        $('pageTaskRepeat').value = 'none';
-        $('pageTaskRepeatCount').value = '4';
-        updatePageTaskRepeatDesc();
-        toolbarPromptOpen = true;
-        $('pageTaskModal').classList.remove('hidden');
-        $('pageTaskText').focus();
-      } else if(cmd==='insertUnorderedList' || cmd==='insertOrderedList'){
-        toggleListForCurrentLine(cmd==='insertUnorderedList' ? 'ul' : 'ol');
-      } else if(cmd==='timestamp'){
-        insertTimestamp();
-      } else if(cmd==='table'){
-        pageBodyEl.focus();
-        toolbarPromptOpen = true;
-        const size = prompt('Table size, e.g. "3x4" (rows x columns)', '3x3');
-        toolbarPromptOpen = false;
-        if(!size) return;
-        // Inserting a table has no "wrap the selection" meaning (unlike Task
-        // or Link) — don't destroy any selected text, insert after it instead.
-        { const sel0 = window.getSelection(); if(sel0.rangeCount && !sel0.isCollapsed) sel0.collapseToEnd(); }
-        const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
-        const rows = m ? Math.max(1, Math.min(20, parseInt(m[1],10))) : 3;
-        const cols = m ? Math.max(1, Math.min(10, parseInt(m[2],10))) : 3;
-        let html = '<table class="user-table">';
-        for(let r=0;r<rows;r++){
-          html += '<tr>';
-          for(let c=0;c<cols;c++) html += '<td><br></td>';
-          html += '</tr>';
-        }
-        html += '</table><div><br></div>';
-        document.execCommand('insertHTML', false, html);
-        attachTableResizeHandles(pageBodyEl);
-        savePage();
-      } else {
-        document.execCommand(cmd, false, null);
-        savePage();
-      }
+      const chain = tiptapEditor.chain().focus();
+      if(cmd==='bold') chain.toggleBold().run();
+      else if(cmd==='italic') chain.toggleItalic().run();
+      else if(cmd==='underline') chain.toggleUnderline().run();
+      else if(cmd==='insertUnorderedList') chain.toggleBulletList().run();
+      else if(cmd==='insertOrderedList') chain.toggleOrderedList().run();
     });
   });
 
