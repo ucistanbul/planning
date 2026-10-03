@@ -643,7 +643,7 @@
 
 <script>
 // ====== BUILD VERSION — bumped every time a new file is shipped ======
-const APP_VERSION = "2026-10-03.1-tiptap-stage1";
+const APP_VERSION = "2026-10-03.2-tiptap-stage1";
 { const tag = document.getElementById('versionTag'); if(tag) tag.textContent = 'v' + APP_VERSION;
   const tag2 = document.getElementById('versionTagSidebar'); if(tag2) tag2.textContent = 'v' + APP_VERSION; }
 // Connection settings now live in config.js (a separate file) so they survive
@@ -1021,7 +1021,7 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     $('pagesListView').classList.add('hidden');
     $('pageDetailView').classList.remove('hidden');
     $('pageTasksHideDone').checked = pageTasksHideDone;
-    syncPageDetailFromData();
+    syncPageDetailFromData(true);
     renderPageTasksList();
     renderPageCommentsPane();
     renderPageHistory();
@@ -1050,13 +1050,19 @@ const sb = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHAB
     await sb.from('pages').delete().eq('id', idToDelete);
   });
 
-  function syncPageDetailFromData(){
+  function syncPageDetailFromData(force){
+    // force=true: an explicit navigation to a specific page (openPage) — must
+    // always load that page's real content, no matter what the editor was
+    // just showing a moment ago for a DIFFERENT page.
+    // force=false (default): a realtime update arrived while this exact page
+    // is already open — only apply it if the user isn't actively typing,
+    // so a collaborator's edit doesn't clobber yours mid-keystroke.
     if(toolbarPromptOpen) return;
     const p = pages.find(x=>x.id===selectedPageId);
     if(!p){ $('pageBackBtn').click(); return; }
     if(document.activeElement !== $('pageTitleInput')) $('pageTitleInput').value = p.title || '';
     const editor = ensureTiptapEditor();
-    if(!editor.isFocused && editor.getHTML() !== (p.body||'') && !(p.body==='' && editor.isEmpty)){
+    if((force || !editor.isFocused) && editor.getHTML() !== (p.body||'')){
       editor.commands.setContent(p.body || '', false);
     }
   }
